@@ -3,16 +3,13 @@ import type { ReactNode } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Staff } from '@/types'
 
-// Mock mode: enabled when Supabase is not configured (demo/preview)
-const isMockMode = !import.meta.env.VITE_SUPABASE_URL
-
-interface MockUser {
+interface User {
   id: string
   email: string
 }
 
 interface AuthContextType {
-  user: MockUser | null
+  user: User | null
   profile: Staff | null
   isAdmin: boolean
   isLoading: boolean
@@ -22,38 +19,18 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
-const MOCK_ADMIN: Staff = {
-  id: 'mock-admin-1',
-  name: 'Uzair Saeed',
-  email: 'uzair.s@foxglove.care',
-  role: 'admin',
-  department: 'GRC',
-  active: true,
-  joined_date: '2023-01-15',
-  created_at: '2023-01-15T10:00:00Z',
-}
-
-const MOCK_USER_OBJ: MockUser = {
-  id: 'mock-admin-1',
-  email: 'uzair.s@foxglove.care',
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<MockUser | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Staff | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
-  const fetchProfile = useCallback(async (userId: string) => {
-    if (isMockMode) {
-      setProfile(MOCK_ADMIN)
-      setIsAdmin(true)
-      return
-    }
+  const fetchProfileByEmail = useCallback(async (email: string) => {
     const { data, error } = await supabase
       .from('staff')
       .select('*')
-      .eq('id', userId)
+      .eq('email', email)
+      .eq('active', true)
       .single()
 
     if (error) {
@@ -68,32 +45,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    if (isMockMode) {
-      // In mock mode, auto-login as admin after a brief delay
-      const timer = setTimeout(() => {
-        setUser(MOCK_USER_OBJ)
-        setProfile(MOCK_ADMIN)
-        setIsAdmin(true)
-        setIsLoading(false)
-      }, 500)
-      return () => clearTimeout(timer)
-    }
-
-    // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        setUser(session.user as MockUser)
-        fetchProfile(session.user.id)
+        setUser({ id: session.user.id, email: session.user.email || '' })
+        if (session.user.email) fetchProfileByEmail(session.user.email)
       }
       setIsLoading(false)
     })
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         if (session?.user) {
-          setUser(session.user as MockUser)
-          fetchProfile(session.user.id)
+          setUser({ id: session.user.id, email: session.user.email || '' })
+          if (session.user.email) fetchProfileByEmail(session.user.email)
         } else {
           setUser(null)
           setProfile(null)
@@ -104,23 +68,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     )
 
     return () => subscription.unsubscribe()
-  }, [fetchProfile])
+  }, [fetchProfileByEmail])
 
-  const signIn = useCallback(async (email: string, _password: string) => {
-    if (isMockMode) {
-      setUser(MOCK_USER_OBJ)
-      setProfile(MOCK_ADMIN)
-      setIsAdmin(true)
-      return { error: null }
-    }
-    const { error } = await supabase.auth.signInWithPassword({ email, password: _password })
-    return { error }
+  const signIn = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    return { error: error as Error | null }
   }, [])
 
   const signOut = useCallback(async () => {
-    if (!isMockMode) {
-      await supabase.auth.signOut()
-    }
+    await supabase.auth.signOut()
     setUser(null)
     setProfile(null)
     setIsAdmin(false)
@@ -135,8 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider')
   return context
 }
