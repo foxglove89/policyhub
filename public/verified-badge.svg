@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" fill="none">
+  <defs>
+    <linearGradient id="sealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22c55e"/>
+      <stop offset="100%" stop-color="#16a34a"/>
+    </linearGradient>
+  </defs>
+  <!-- Outer circle -->
+  <circle cx="40" cy="40" r="36" stroke="url(#sealGrad)" stroke-width="2.5" fill="#f0fdf4"/>
+  <!-- Foxglove leaf motif border decorations -->
+  <g opacity="0.4">
+    <ellipse cx="40" cy="7" rx="4" ry="7" fill="#22c55e" transform="rotate(0 40 7)"/>
+    <ellipse cx="40" cy="73" rx="4" ry="7" fill="#22c55e" transform="rotate(180 40 73)"/>
+    <ellipse cx="7" cy="40" rx="7" ry="4" fill="#22c55e" transform="rotate(0 7 40)"/>
+    <ellipse cx="73" cy="40" rx="7" ry="4" fill="#22c55e" transform="rotate(180 73 40)"/>
+    <ellipse cx="16.7" cy="16.7" rx="4" ry="7" fill="#22c55e" transform="rotate(-45 16.7 16.7)"/>
+    <ellipse cx="63.3" cy="63.3" rx="4" ry="7" fill="#22c55e" transform="rotate(135 63.3 63.3)"/>
+    <ellipse cx="16.7" cy="63.3" rx="4" ry="7" fill="#22c55e" transform="rotate(45 16.7 63.3)"/>
+    <ellipse cx="63.3" cy="16.7" rx="4" ry="7" fill="#22c55e" transform="rotate(-135 63.3 16.7)"/>
+  </g>
+  <!-- Inner circle -->
+  <circle cx="40" cy="40" r="28" stroke="#22c55e" stroke-width="1.5" fill="none" opacity="0.3"/>
+  <!-- Checkmark -->
+  <path d="M27 41 L35 49 L53 31" stroke="url(#sealGrad)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

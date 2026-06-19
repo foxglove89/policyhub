@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <defs>
+    <linearGradient id="stemGrad" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="bellGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c4b5fd"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="bellGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+    <linearGradient id="bellGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+  </defs>
+  <!-- Stem -->
+  <rect x="48" y="20" width="4" height="72" rx="2" fill="url(#stemGrad)" opacity="0.9"/>
+  <!-- Bottom bell -->
+  <path d="M50 82 C38 82 35 70 38 62 C40 56 45 52 50 52 C55 52 60 56 62 62 C65 70 62 82 50 82Z" fill="url(#bellGrad3)"/>
+  <ellipse cx="50" cy="62" rx="6" ry="4" fill="#5b21b6" opacity="0.3"/>
+  <!-- Lower-mid bell -->
+  <path d="M50 64 C40 64 37 54 40 47 C42 42 46 38 50 38 C54 38 58 42 60 47 C63 54 60 64 50 64Z" fill="url(#bellGrad2)"/>
+  <ellipse cx="50" cy="47" rx="5" ry="3.5" fill="#5b21b6" opacity="0.25"/>
+  <!-- Upper-mid bell -->
+  <path d="M50 48 C42 48 39 39 42 33 C44 28 47 25 50 25 C53 25 56 28 58 33 C61 39 58 48 50 48Z" fill="url(#bellGrad1)"/>
+  <ellipse cx="50" cy="33" rx="4" ry="3" fill="#5b21b6" opacity="0.2"/>
+  <!-- Top bell -->
+  <path d="M50 34 C44 34 41 26 44 20 C46 16 48 14 50 14 C52 14 54 16 56 20 C59 26 56 34 50 34Z" fill="url(#bellGrad1)"/>
+  <ellipse cx="50" cy="20" rx="3.5" ry="2.5" fill="#5b21b6" opacity="0.2"/>
+  <!-- Left leaf -->
+  <path d="M48 52 C40 50 32 44 30 36 C28 32 30 28 34 30 C38 32 44 40 48 48" fill="#16a34a" opacity="0.5"/>
+  <!-- Right leaf -->
+  <path d="M52 44 C60 42 68 36 70 28 C72 24 70 20 66 22 C62 24 56 32 52 40" fill="#16a34a" opacity="0.5"/>
+</svg>

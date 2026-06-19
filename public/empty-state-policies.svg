@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 200" fill="none">
+  <defs>
+    <linearGradient id="folderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5f5f4"/>
+      <stop offset="100%" stop-color="#e7e5e4"/>
+    </linearGradient>
+    <linearGradient id="sproutGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+  </defs>
+  <!-- Folder base -->
+  <path d="M40 65 C40 58 45 52 52 52 L95 52 C98 52 101 54 103 56 L112 68 L188 68 C195 68 200 74 200 80 L200 155 C200 162 195 168 188 168 L52 168 C45 168 40 162 40 155Z" fill="url(#folderGrad)" stroke="#d6d3d1" stroke-width="2"/>
+  <!-- Folder flap -->
+  <path d="M40 80 C40 73 46 68 53 68 L187 68 C194 68 200 73 200 80 L200 90 L40 90Z" fill="#fafaf9" stroke="#d6d3d1" stroke-width="2"/>
+  <!-- Document inside -->
+  <rect x="70" y="85" width="60" height="75" rx="4" fill="white" stroke="#d6d3d1" stroke-width="1.5"/>
+  <line x1="80" y1="100" x2="120" y2="100" stroke="#e7e5e4" stroke-width="3" stroke-linecap="round"/>
+  <line x1="80" y1="112" x2="115" y2="112" stroke="#e7e5e4" stroke-width="3" stroke-linecap="round"/>
+  <line x1="80" y1="124" x2="110" y2="124" stroke="#e7e5e4" stroke-width="3" stroke-linecap="round"/>
+  <line x1="80" y1="136" x2="118" y2="136" stroke="#e7e5e4" stroke-width="3" stroke-linecap="round"/>
+  <!-- Sprout stem -->
+  <rect x="160" y="120" width="3" height="35" rx="1.5" fill="#a78bfa" opacity="0.6"/>
+  <!-- Sprout leaves -->
+  <ellipse cx="154" cy="118" rx="8" ry="5" fill="url(#sproutGrad)" opacity="0.7" transform="rotate(-30 154 118)"/>
+  <ellipse cx="169" cy="115" rx="8" ry="5" fill="url(#sproutGrad)" opacity="0.7" transform="rotate(30 169 115)"/>
+  <ellipse cx="161" cy="108" rx="6" ry="4" fill="url(#sproutGrad)" opacity="0.8"/>
+  <!-- Ground dots -->
+  <circle cx="140" cy="175" r="3" fill="#d6d3d1" opacity="0.5"/>
+  <circle cx="155" cy="178" r="2.5" fill="#d6d3d1" opacity="0.4"/>
+  <circle cx="130" cy="178" r="2" fill="#d6d3d1" opacity="0.3"/>
+</svg>

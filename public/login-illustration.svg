@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5f3ff"/>
+      <stop offset="50%" stop-color="#ede9fe"/>
+      <stop offset="100%" stop-color="#ddd6fe"/>
+    </linearGradient>
+    <linearGradient id="flower1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c4b5fd"/>
+      <stop offset="100%" stop-color="#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="flower2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="leafGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#86efac"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bgGrad)" opacity="0.4"/>
+
+  <!-- Decorative organic shapes -->
+  <circle cx="150" cy="480" r="120" fill="#ede9fe" opacity="0.5"/>
+  <circle cx="650" cy="120" r="100" fill="#ddd6fe" opacity="0.4"/>
+  <ellipse cx="400" cy="550" rx="300" ry="80" fill="#f5f3ff" opacity="0.6"/>
+
+  <!-- Large foxglove left -->
+  <rect x="220" y="180" width="6" height="320" rx="3" fill="#7c3aed" opacity="0.4"/>
+  <path d="M223 200 C200 200 195 160 203 140 C207 128 215 120 223 120 C231 120 239 128 243 140 C251 160 246 200 223 200Z" fill="url(#flower1)" opacity="0.85"/>
+  <path d="M223 260 C202 260 197 224 205 206 C209 195 216 188 223 188 C230 188 237 195 241 206 C249 224 244 260 223 260Z" fill="url(#flower2)" opacity="0.8"/>
+  <path d="M223 320 C204 320 199 288 207 272 C211 262 217 256 223 256 C229 256 235 262 239 272 C247 288 242 320 223 320Z" fill="url(#flower1)" opacity="0.75"/>
+  <path d="M223 380 C206 380 201 352 209 338 C212 329 218 324 223 324 C228 324 234 329 237 338 C245 352 240 380 223 380Z" fill="url(#flower2)" opacity="0.7"/>
+  <path d="M223 440 C208 440 204 416 211 404 C214 396 219 392 223 392 C227 392 232 396 235 404 C242 416 238 440 223 440Z" fill="url(#flower1)" opacity="0.65"/>
+
+  <!-- Small foxglove right -->
+  <rect x="560" y="220" width="5" height="280" rx="2" fill="#6d28d9" opacity="0.35"/>
+  <path d="M562 240 C545 240 541 210 547 194 C550 184 556 178 562 178 C568 178 574 184 577 194 C583 210 579 240 562 240Z" fill="url(#flower2)" opacity="0.7"/>
+  <path d="M562 290 C546 290 542 264 548 250 C551 241 556 236 562 236 C568 236 573 241 576 250 C582 264 578 290 562 290Z" fill="url(#flower1)" opacity="0.65"/>
+  <path d="M562 340 C547 340 543 316 550 304 C553 296 557 292 562 292 C567 292 571 296 574 304 C581 316 577 340 562 340Z" fill="url(#flower2)" opacity="0.6"/>
+  <path d="M562 390 C548 390 545 370 551 360 C553 353 558 350 562 350 C566 350 571 353 573 360 C579 370 576 390 562 390Z" fill="url(#flower1)" opacity="0.55"/>
+
+  <!-- Medium foxglove center-right -->
+  <rect x="420" y="150" width="5" height="350" rx="2" fill="#7c3aed" opacity="0.3"/>
+  <path d="M422 170 C403 170 399 136 407 118 C411 108 418 102 422 102 C426 102 433 108 437 118 C445 136 441 170 422 170Z" fill="url(#flower1)" opacity="0.6"/>
+  <path d="M422 230 C404 230 400 200 408 184 C411 175 417 170 422 170 C427 170 433 175 436 184 C444 200 440 230 422 230Z" fill="url(#flower2)" opacity="0.55"/>
+  <path d="M422 290 C405 290 401 262 409 248 C412 240 418 236 422 236 C426 236 432 240 435 248 C443 262 439 290 422 290Z" fill="url(#flower1)" opacity="0.5"/>
+  <path d="M422 350 C406 350 402 324 410 310 C413 303 418 299 422 299 C426 299 431 303 434 310 C442 324 438 350 422 350Z" fill="url(#flower2)" opacity="0.45"/>
+  <path d="M422 410 C407 410 403 386 411 374 C414 368 418 364 422 364 C426 364 430 368 433 374 C441 386 437 410 422 410Z" fill="url(#flower1)" opacity="0.4"/>
+
+  <!-- Decorative leaves -->
+  <path d="M215 340 C170 320 130 270 125 220 C122 195 135 180 150 195 C170 215 195 270 215 320" fill="url(#leafGrad)" opacity="0.35"/>
+  <path d="M431 320 C475 300 515 250 520 200 C523 175 510 160 495 175 C475 195 450 250 431 300" fill="url(#leafGrad)" opacity="0.3"/>
+  <path d="M555 340 C595 325 630 285 635 245 C637 225 627 212 615 225 C598 242 578 285 555 325" fill="url(#leafGrad)" opacity="0.3"/>
+
+  <!-- Subtle ground line -->
+  <path d="M0 500 Q200 480 400 490 T800 480 L800 600 L0 600Z" fill="#dcfce7" opacity="0.2"/>
+</svg>
