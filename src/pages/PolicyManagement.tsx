@@ -1051,7 +1051,7 @@ export default function PolicyManagement() {
     [addToast]
   )
 
-  const handleToggleStatus = useCallback(
+    const handleToggleStatus = useCallback(
     async (id: string) => {
       const policy = policies.find((p) => p.id === id)
       if (!policy) return
@@ -1062,7 +1062,6 @@ export default function PolicyManagement() {
         const { error } = await supabase
           .from('policies')
           .update({
-            status: newActive ? 'active' : 'inactive',
             active: newActive,
             last_updated: new Date().toISOString(),
           })
@@ -1071,15 +1070,11 @@ export default function PolicyManagement() {
         if (error) throw error
 
         setPolicies((prev) =>
-          prev.map((p) => {
-            if (p.id !== id) return p
-            return {
-              ...p,
-              status: newActive ? 'active' as const : 'inactive' as const,
-              active: newActive,
-              last_updated: new Date().toISOString(),
-            }
-          })
+          prev.map((p) =>
+            p.id === id
+              ? { ...p, status: newActive ? 'active' as const : 'inactive' as const, active: newActive, last_updated: new Date().toISOString() }
+              : p
+          )
         )
 
         addToast(newActive ? 'Policy has been activated' : 'Policy has been deactivated')
