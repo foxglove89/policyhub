@@ -1,6 +1,7 @@
-import { useMemo, useState, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { supabase } from '@/lib/supabase'
 import StatusBadge from '@/components/StatusBadge'
 import {
   Download,
@@ -10,8 +11,12 @@ import {
   Award,
   ChevronRight,
   Signature,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react'
 import { format, subMonths, isAfter } from 'date-fns'
+import type { Acknowledgement, Policy } from '@/types'
+import { POLICY_CATEGORIES } from '@/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────
 interface SignedPolicy {
@@ -22,44 +27,6 @@ interface SignedPolicy {
   signed_date: string
 }
 
-// ─── Mock Data: 18 Signed Policies (last 3 months) ──────────────────────
-const SIGNED_POLICIES: SignedPolicy[] = [
-  // January 2025 (8)
-  { id: 'p1', title: 'COVID-19 Infection Control Policy', category: 'COVID-19', version: '3.2', signed_date: '2025-01-20T10:30:00Z' },
-  { id: 'p8', title: 'Child Protection and Safeguarding Policy 2025', category: 'Child Protection', version: '5.1', signed_date: '2025-01-19T14:15:00Z' },
-  { id: 'p24', title: 'CCTV and Digital Surveillance Policy', category: 'GDPR', version: '2.3', signed_date: '2025-01-18T09:45:00Z' },
-  { id: 'p13', title: 'Medication Administration Policy', category: 'Health and Well-being', version: '3.8', signed_date: '2025-01-17T11:20:00Z' },
-  { id: 'p3', title: 'Individual Care Planning Guidelines', category: 'Care Planning', version: '4.0', signed_date: '2025-01-16T16:00:00Z' },
-  { id: 'p4', title: 'Placement Planning and Reviews', category: 'Care Planning', version: '3.5', signed_date: '2025-01-15T08:30:00Z' },
-  { id: 'p14', title: 'Mental Health and Emotional Wellbeing', category: 'Health and Well-being', version: '2.5', signed_date: '2025-01-14T13:10:00Z' },
-  { id: 'p9', title: 'Allegations Against Staff Procedure', category: 'Child Protection', version: '3.4', signed_date: '2025-01-13T15:45:00Z' },
-  // December 2024 (6)
-  { id: 'p6', title: 'Listening to Children and Young People', category: 'Views, Wishes and Feelings', version: '2.8', signed_date: '2024-12-18T10:00:00Z' },
-  { id: 'p10', title: 'Missing from Care Protocol', category: 'Child Protection', version: '2.7', signed_date: '2024-12-17T09:30:00Z' },
-  { id: 'p17', title: 'Education and Achievement Support', category: 'Enjoyment and Achievement', version: '2.4', signed_date: '2024-12-16T14:20:00Z' },
-  { id: 'p20', title: 'Restorative Practice and Conflict Resolution', category: 'Positive Relationships', version: '2.1', signed_date: '2024-12-12T11:00:00Z' },
-  { id: 'p21', title: 'Fire Safety and Emergency Procedures', category: 'Leadership and Management', version: '4.2', signed_date: '2024-12-10T08:45:00Z' },
-  { id: 'p16', title: 'Continuous Improvement Framework', category: 'Quality of Care', version: '1.7', signed_date: '2024-12-05T16:15:00Z' },
-  // November 2024 (4)
-  { id: 'p18', title: 'Leisure Activities and Enrichment Programme', category: 'Enjoyment and Achievement', version: '1.6', signed_date: '2024-11-28T09:00:00Z' },
-  { id: 'p22', title: 'Staff Supervision and Appraisal Policy', category: 'Leadership and Management', version: '3.0', signed_date: '2024-11-25T13:30:00Z' },
-]
-
-const TOTAL_POLICIES = 24 // Total policies in the system
-
-const CATEGORY_ORDER = [
-  'COVID-19',
-  'Care Planning',
-  'Views, Wishes and Feelings',
-  'Child Protection',
-  'Health and Well-being',
-  'Quality of Care',
-  'Enjoyment and Achievement',
-  'Positive Relationships',
-  'Leadership and Management',
-  'GDPR',
-]
-
 // ─── Helpers ─────────────────────────────────────────────────────────────
 function formatDateTimeFull(iso: string): string {
   const d = new Date(iso)
@@ -67,7 +34,7 @@ function formatDateTimeFull(iso: string): string {
 }
 
 function getCategoryStreak(signedPolicies: SignedPolicy[]): number {
-  const now = new Date('2025-01-21T00:00:00Z')
+  const now = new Date()
   let streak = 0
   for (let i = 0; i < 6; i++) {
     const monthStart = subMonths(now, i)
@@ -147,15 +114,15 @@ function StatCard({
   )
 }
 
-function CategoryBreakdown({ signedPolicies }: { signedPolicies: SignedPolicy[] }) {
+function CategoryBreakdown({ signedPolicies, totalPoliciesByCategory }: { signedPolicies: SignedPolicy[]; totalPoliciesByCategory: Record<string, number> }) {
   const stats = useMemo(() => {
-    return CATEGORY_ORDER.map(cat => {
+    return POLICY_CATEGORIES.map(cat => {
       const catSigned = signedPolicies.filter(p => p.category === cat).length
-      const catTotal = 2 // Each category has 2-4 policies in our mock
-      const pct = Math.round((catSigned / catTotal) * 100)
+      const catTotal = totalPoliciesByCategory[cat] || 0
+      const pct = catTotal > 0 ? Math.round((catSigned / catTotal) * 100) : 0
       return { category: cat, signed: catSigned, total: catTotal, pct }
     })
-  }, [signedPolicies])
+  }, [signedPolicies, totalPoliciesByCategory])
 
   return (
     <div className="bg-white border border-neutral-200 rounded-xl p-6" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
@@ -238,7 +205,6 @@ function SignatureTimeline({ policies }: { policies: SignedPolicy[] }) {
                       alt="Verified"
                       className="w-5 h-5"
                       onError={(e) => {
-                        // Fallback if SVG doesn't exist
                         e.currentTarget.style.display = 'none'
                         e.currentTarget.parentElement!.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>'
                       }}
@@ -365,27 +331,115 @@ function EmptyState() {
 
 // ─── Main MySignatures Component ─────────────────────────────────────────
 export default function MySignatures() {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const [mounted, setMounted] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [signedPolicies, setSignedPolicies] = useState<SignedPolicy[]>([])
+  const [totalPolicies, setTotalPolicies] = useState(0)
+  const [totalPoliciesByCategory, setTotalPoliciesByCategory] = useState<Record<string, number>>({})
 
   useEffect(() => {
     const timer = setTimeout(() => setMounted(true), 50)
     return () => clearTimeout(timer)
   }, [])
 
+  // Fetch data from Supabase
+  useEffect(() => {
+    async function fetchData() {
+      if (!user?.id) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Fetch total active policies
+        const { data: allPolicies, error: policiesError } = await supabase
+          .from('policies')
+          .select('category')
+          .eq('active', true)
+
+        if (policiesError) throw policiesError
+
+        setTotalPolicies(allPolicies?.length || 0)
+
+        // Count policies per category
+        const catCounts: Record<string, number> = {}
+        allPolicies?.forEach(p => {
+          catCounts[p.category] = (catCounts[p.category] || 0) + 1
+        })
+        setTotalPoliciesByCategory(catCounts)
+
+        // Fetch user's acknowledgements with policy details
+        const { data: ackData, error: ackError } = await supabase
+          .from('acknowledgements')
+          .select('*, policy:policies(*)')
+          .eq('staff_id', user.id)
+          .order('signed_date', { ascending: false })
+
+        if (ackError) throw ackError
+
+        const mapped: SignedPolicy[] = (ackData || []).map((ack: any) => ({
+          id: ack.policy_id,
+          title: ack.policy?.title || 'Unknown Policy',
+          category: ack.policy?.category || 'Unknown',
+          version: ack.policy?.version || '',
+          signed_date: ack.signed_date,
+        }))
+
+        setSignedPolicies(mapped)
+      } catch (err: any) {
+        console.error('Error fetching signatures:', err)
+        setError(err.message || 'Failed to load signatures')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [user?.id])
+
   const name = profile?.name ?? 'Staff Member'
 
-  const totalSigned = SIGNED_POLICIES.length
-  const completionPct = Math.round((totalSigned / TOTAL_POLICIES) * 100)
-  const streak = getCategoryStreak(SIGNED_POLICIES)
+  const totalSigned = signedPolicies.length
+  const completionPct = totalPolicies > 0 ? Math.round((totalSigned / totalPolicies) * 100) : 0
+  const streak = getCategoryStreak(signedPolicies)
 
   const dateRange = useMemo(() => {
-    if (SIGNED_POLICIES.length === 0) return ''
-    const dates = SIGNED_POLICIES.map(p => new Date(p.signed_date))
+    if (signedPolicies.length === 0) return ''
+    const dates = signedPolicies.map(p => new Date(p.signed_date))
     const earliest = new Date(Math.min(...dates.map(d => d.getTime())))
     const latest = new Date(Math.max(...dates.map(d => d.getTime())))
     return `${format(earliest, 'd MMM yyyy')} - ${format(latest, 'd MMM yyyy')}`
-  }, [])
+  }, [signedPolicies])
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 size={40} className="text-primary-500 animate-spin mb-4" />
+        <p className="font-body text-sm text-neutral-500">Loading signatures...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <AlertTriangle size={40} className="text-error-500 mb-4" />
+        <p className="font-body text-base text-neutral-700 font-medium">Failed to load signatures</p>
+        <p className="font-body text-sm text-neutral-500 mt-1">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-body font-medium hover:bg-primary-700 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   if (totalSigned === 0) {
     return <EmptyState />
@@ -441,7 +495,7 @@ export default function MySignatures() {
           ].join(' ')}
           style={{ transitionDelay: '300ms' }}
         >
-          <SignatureTimeline policies={SIGNED_POLICIES} />
+          <SignatureTimeline policies={signedPolicies} />
         </div>
 
         {/* Sidebar */}
@@ -452,8 +506,8 @@ export default function MySignatures() {
           ].join(' ')}
           style={{ transitionDelay: '350ms' }}
         >
-          <CategoryBreakdown signedPolicies={SIGNED_POLICIES} />
-          <ExportSection policies={SIGNED_POLICIES} />
+          <CategoryBreakdown signedPolicies={signedPolicies} totalPoliciesByCategory={totalPoliciesByCategory} />
+          <ExportSection policies={signedPolicies} />
         </div>
       </div>
     </div>

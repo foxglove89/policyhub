@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import type { Staff } from '@/types'
-import { INITIAL_STAFF } from '@/types'
+import { supabase } from '@/lib/supabase'
 import DataTable from '@/components/DataTable'
 import {
   Search,
@@ -18,6 +18,7 @@ import {
   FileText,
   UserX,
   MoreVertical,
+  Loader2,
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -26,7 +27,6 @@ import { format } from 'date-fns'
 /* ------------------------------------------------------------------ */
 
 interface StaffMember extends Staff {
-  joined_date: string
   policies_signed: number
   policies_total: number
   compliance_pct: number
@@ -85,44 +85,6 @@ function getComplianceBarColor(pct: number): string {
   if (pct >= 50) return 'bg-warning-500'
   return 'bg-error-500'
 }
-
-/* ------------------------------------------------------------------ */
-/*  Mock data                                                          */
-/* ------------------------------------------------------------------ */
-
-const JOINED_DATES = [
-  '2022-03-15', '2021-07-22', '2023-01-10', '2022-09-05',
-  '2023-05-18', '2023-02-28', '2022-11-14', '2023-08-01',
-  '2021-12-06', '2023-04-12', '2022-06-20', '2023-09-25',
-  '2024-01-08', '2022-04-30', '2023-07-17', '2024-02-14',
-]
-
-const LAST_ACTIVE = [
-  '2 hours ago', '1 day ago', '3 hours ago', '5 days ago',
-  '1 week ago', '2 days ago', '4 hours ago', '1 day ago',
-  '3 days ago', '6 hours ago', '2 weeks ago', '1 day ago',
-  '4 days ago', '8 hours ago', '5 days ago', '3 weeks ago',
-]
-
-const INITIAL_MOCK_STAFF: StaffMember[] = INITIAL_STAFF.map((s, i) => {
-  const total = 24 + (i % 3)
-  const signed = Math.max(0, Math.min(total, Math.floor(total * (0.35 + Math.random() * 0.65))))
-  return {
-    id: generateId(),
-    name: s.name,
-    email: s.email,
-    role: s.role,
-    department: s.department,
-    joined_date: JOINED_DATES[i] ?? '2023-01-01',
-    created_at: JOINED_DATES[i] ?? '2023-01-01',
-    active: !(i === 10 || i === 13),
-    policies_signed: signed,
-    policies_total: total,
-    compliance_pct: Math.round((signed / total) * 100),
-    last_active: LAST_ACTIVE[i] ?? '1 day ago',
-    status: i === 10 || i === 13 ? 'inactive' : 'active',
-  }
-})
 
 /* ------------------------------------------------------------------ */
 /*  Toast Component                                                    */
@@ -267,7 +229,7 @@ function AddStaffModal({
 }: {
   open: boolean
   onClose: () => void
-  onAdd: (staff: Omit<StaffMember, 'id' | 'policies_signed' | 'policies_total' | 'compliance_pct' | 'last_active' | 'created_at'>) => void
+  onAdd: (staff: Omit<StaffMember, 'id' | 'policies_signed' | 'policies_total' | 'compliance_pct' | 'last_active' | 'created_at'>) => Promise<void>
 }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -275,6 +237,7 @@ function AddStaffModal({
   const [department, setDepartment] = useState('Care Team')
   const [password, setPassword] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [submitting, setSubmitting] = useState(false)
 
   const reset = () => {
     setName('')
@@ -300,17 +263,22 @@ function AddStaffModal({
     return Object.keys(e).length === 0
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return
-    onAdd({
-      name: name.trim(),
-      email: email.trim(),
-      role,
-      department,
-      active: true,
-      joined_date: format(new Date(), 'yyyy-MM-dd'),
-      status: 'active',
-    })
+    setSubmitting(true)
+    try {
+      await onAdd({
+        name: name.trim(),
+        email: email.trim(),
+        role,
+        department,
+        active: true,
+        joined_date: format(new Date(), 'yyyy-MM-dd'),
+        status: 'active',
+      })
+    } finally {
+      setSubmitting(false)
+    }
     handleClose()
   }
 
@@ -403,9 +371,17 @@ function AddStaffModal({
           </button>
           <button
             onClick={handleSubmit}
-            className="px-5 h-11 rounded-lg bg-primary-600 text-white text-sm font-body font-medium hover:bg-primary-700 transition-colors"
+            disabled={submitting}
+            className="px-5 h-11 rounded-lg bg-primary-600 text-white text-sm font-body font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            Create Staff
+            {submitting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Creating...
+              </>
+            ) : (
+              'Create Staff'
+            )}
           </button>
         </div>
       </div>
@@ -426,13 +402,14 @@ function EditStaffModal({
   open: boolean
   onClose: () => void
   staff: StaffMember | null
-  onSave: (id: string, updates: Partial<StaffMember>) => void
+  onSave: (id: string, updates: Partial<StaffMember>) => Promise<void>
 }) {
   const [name, setName] = useState('')
   const [role, setRole] = useState<'admin' | 'staff'>('staff')
   const [department, setDepartment] = useState('')
   const [active, setActive] = useState(true)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (staff) {
@@ -453,14 +430,20 @@ function EditStaffModal({
     return Object.keys(e).length === 0
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return
-    onSave(staff.id, {
-      name: name.trim(),
-      role,
-      department,
-      status: active ? 'active' : 'inactive',
-    })
+    setSubmitting(true)
+    try {
+      await onSave(staff.id, {
+        name: name.trim(),
+        role,
+        department,
+        status: active ? 'active' : 'inactive',
+        active,
+      })
+    } finally {
+      setSubmitting(false)
+    }
     onClose()
   }
 
@@ -540,9 +523,17 @@ function EditStaffModal({
           </button>
           <button
             onClick={handleSubmit}
-            className="px-5 h-11 rounded-lg bg-primary-600 text-white text-sm font-body font-medium hover:bg-primary-700 transition-colors"
+            disabled={submitting}
+            className="px-5 h-11 rounded-lg bg-primary-600 text-white text-sm font-body font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            Save Changes
+            {submitting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
           </button>
         </div>
       </div>
@@ -686,18 +677,75 @@ function DropdownDivider() {
 /* ------------------------------------------------------------------ */
 
 export default function StaffManagement() {
-  const [staff, setStaff] = useState<StaffMember[]>(INITIAL_MOCK_STAFF)
+  const [staff, setStaff] = useState<StaffMember[]>([])
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<'all' | 'admin' | 'staff'>('all')
   const [deptFilter, setDeptFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [loading, setLoading] = useState(true)
 
   const [addOpen, setAddOpen] = useState(false)
   const [editStaff, setEditStaff] = useState<StaffMember | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const [resetStaff, setResetStaff] = useState<StaffMember | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
+
+  // Fetch staff data from Supabase
+  useEffect(() => {
+    async function fetchStaff() {
+      try {
+        setLoading(true)
+
+        // Fetch all active staff
+        const { data: staffData, error: staffError } = await supabase
+          .from('staff')
+          .select('*')
+          .eq('active', true)
+
+        if (staffError) throw staffError
+
+        // Fetch total policies count
+        const { data: policiesData, error: policiesError } = await supabase
+          .from('policies')
+          .select('id')
+          .eq('active', true)
+
+        if (policiesError) throw policiesError
+
+        // Fetch all acknowledgements
+        const { data: ackData, error: ackError } = await supabase
+          .from('acknowledgements')
+          .select('staff_id')
+
+        if (ackError) throw ackError
+
+        const totalPolicies = policiesData?.length || 0
+
+        // Build staff with compliance
+        const mapped: StaffMember[] = (staffData || []).map((s: any) => {
+          const signedCount = (ackData || []).filter((a: any) => a.staff_id === s.id).length
+          return {
+            ...s,
+            policies_signed: signedCount,
+            policies_total: totalPolicies,
+            compliance_pct: totalPolicies > 0 ? Math.round((signedCount / totalPolicies) * 100) : 0,
+            last_active: 'Recently',
+            status: s.active ? 'active' : 'inactive',
+          }
+        })
+
+        setStaff(mapped)
+      } catch (err: any) {
+        console.error('Error fetching staff:', err)
+        addToast(`Failed to load staff: ${err.message}`, 'error')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchStaff()
+  }, [])
 
   const addToast = useCallback((message: string, variant: Toast['variant'] = 'success') => {
     const id = `${++toastIdCounter}-${Date.now()}`
@@ -709,55 +757,133 @@ export default function StaffManagement() {
   }, [])
 
   const handleAddStaff = useCallback(
-    (data: Omit<StaffMember, 'id' | 'policies_signed' | 'policies_total' | 'compliance_pct' | 'last_active' | 'created_at'>) => {
-      const newStaff: StaffMember = {
-        ...data,
-        id: generateId(),
-        policies_signed: 0,
-        policies_total: 24,
-        compliance_pct: 0,
-        last_active: 'Just now',
-        created_at: new Date().toISOString(),
+    async (data: Omit<StaffMember, 'id' | 'policies_signed' | 'policies_total' | 'compliance_pct' | 'last_active' | 'created_at'>) => {
+      try {
+        // Create auth user first
+        const tempPassword = data.email + '123!' // Simple temp password
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: data.email,
+          password: tempPassword,
+        })
+
+        if (authError) {
+          // If user already exists, continue with staff record
+          console.warn('Auth signup warning:', authError)
+        }
+
+        // Insert into staff table
+        const { data: newStaff, error: insertError } = await supabase
+          .from('staff')
+          .insert({
+            name: data.name,
+            email: data.email,
+            role: data.role,
+            department: data.department,
+            active: true,
+            joined_date: data.joined_date,
+          })
+          .select()
+          .single()
+
+        if (insertError) throw insertError
+
+        // Add to local state
+        const totalPolicies = staff[0]?.policies_total || 0
+        setStaff((prev) => [
+          ...prev,
+          {
+            ...newStaff,
+            policies_signed: 0,
+            policies_total: totalPolicies,
+            compliance_pct: 0,
+            last_active: 'Just now',
+            status: 'active',
+          } as StaffMember,
+        ])
+
+        addToast(`${data.name} has been added successfully`)
+      } catch (err: any) {
+        console.error('Error adding staff:', err)
+        addToast(`Failed to add staff: ${err.message}`, 'error')
       }
-      setStaff((prev) => [...prev, newStaff])
-      addToast(`${data.name} has been added successfully`)
     },
-    [addToast]
+    [addToast, staff]
   )
 
   const handleEditStaff = useCallback(
-    (id: string, updates: Partial<StaffMember>) => {
-      setStaff((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
-      )
-      addToast('Staff member updated successfully')
+    async (id: string, updates: Partial<StaffMember>) => {
+      try {
+        const { error } = await supabase
+          .from('staff')
+          .update(updates)
+          .eq('id', id)
+
+        if (error) throw error
+
+        setStaff((prev) =>
+          prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
+        )
+        addToast('Staff member updated successfully')
+      } catch (err: any) {
+        console.error('Error updating staff:', err)
+        addToast(`Failed to update: ${err.message}`, 'error')
+      }
     },
     [addToast]
   )
 
   const handleResetPassword = useCallback(
-    (staff: StaffMember) => {
-      addToast(`Password reset email sent to ${staff.name}`, 'info')
+    async (staffMember: StaffMember) => {
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(staffMember.email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        })
+
+        if (error) throw error
+
+        addToast(`Password reset email sent to ${staffMember.name}`, 'info')
+      } catch (err: any) {
+        console.error('Error resetting password:', err)
+        addToast(`Failed to send reset: ${err.message}`, 'error')
+      }
     },
     [addToast]
   )
 
   const handleSendReminder = useCallback(
-    (staff: StaffMember) => {
-      addToast(`Reminder sent to ${staff.name}`, 'success')
+    (staffMember: StaffMember) => {
+      addToast(`Reminder sent to ${staffMember.name}`, 'success')
     },
     [addToast]
   )
 
   const handleToggleStatus = useCallback(
-    (id: string) => {
-      setStaff((prev) =>
-        prev.map((s) =>
-          s.id === id ? { ...s, status: s.status === 'active' ? 'inactive' : 'active' as const } : s
+    async (id: string) => {
+      const staffMember = staff.find((s) => s.id === id)
+      if (!staffMember) return
+
+      const newStatus = staffMember.status === 'active' ? 'inactive' : 'active'
+
+      try {
+        const { error } = await supabase
+          .from('staff')
+          .update({ active: newStatus === 'active', status: newStatus })
+          .eq('id', id)
+
+        if (error) throw error
+
+        setStaff((prev) =>
+          prev.map((s) =>
+            s.id === id ? { ...s, status: newStatus as 'active' | 'inactive', active: newStatus === 'active' } : s
+          )
         )
-      )
+        addToast(`Staff member ${newStatus === 'active' ? 'activated' : 'deactivated'}`)
+      } catch (err: any) {
+        console.error('Error toggling status:', err)
+        addToast(`Failed: ${err.message}`, 'error')
+      }
     },
-    []
+    [staff, addToast]
   )
 
   /* Stats */
@@ -957,6 +1083,15 @@ export default function StaffManagement() {
     ],
     [addToast, handleToggleStatus, handleSendReminder]
   )
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 size={40} className="text-primary-500 animate-spin mb-4" />
+        <p className="font-body text-sm text-neutral-500">Loading staff data...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="animate-in fade-in duration-500">

@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '@/hooks/useAuth'
+import { supabase } from '@/lib/supabase'
 import PolicyCard from '@/components/PolicyCard'
 import StatusBadge from '@/components/StatusBadge'
 import {
@@ -9,83 +11,44 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react'
 import { format } from 'date-fns'
-
-// ─── Types ───────────────────────────────────────────────────────────────
-interface MockPolicy {
-  id: string
-  title: string
-  category: string
-  version: string
-  description: string
-  last_updated: string
-  due_date: string
-  signed_date: string | null
-  status: 'signed' | 'pending' | 'overdue'
-}
+import type { Policy, Acknowledgement } from '@/types'
+import { POLICY_CATEGORIES } from '@/types'
 
 type StatusFilter = 'all' | 'signed' | 'pending' | 'overdue'
 type SortOption = 'due_date' | 'updated' | 'title' | 'category'
 
-// ─── Mock Data: 24 Policies ──────────────────────────────────────────────
-const MOCK_POLICIES: MockPolicy[] = [
-  { id: 'p1', title: 'COVID-19 Infection Control Policy', category: 'COVID-19', version: '3.2', description: 'Procedures for managing infection control and COVID-19 outbreaks.', last_updated: '2025-01-10T09:00:00Z', due_date: '2025-01-20T00:00:00Z', signed_date: '2025-01-12T14:30:00Z', status: 'signed' },
-  { id: 'p2', title: 'Pandemic Response and Business Continuity', category: 'COVID-19', version: '2.1', description: 'Business continuity planning for pandemic scenarios.', last_updated: '2025-01-08T11:00:00Z', due_date: '2025-01-28T00:00:00Z', signed_date: null, status: 'pending' },
-  { id: 'p3', title: 'Individual Care Planning Guidelines', category: 'Care Planning', version: '4.0', description: 'Guidelines for creating and maintaining individual care plans.', last_updated: '2024-12-15T10:00:00Z', due_date: '2025-01-15T00:00:00Z', signed_date: '2025-01-10T09:15:00Z', status: 'signed' },
-  { id: 'p4', title: 'Placement Planning and Reviews', category: 'Care Planning', version: '3.5', description: 'Procedures for placement planning and regular reviews.', last_updated: '2024-12-20T14:00:00Z', due_date: '2025-01-18T00:00:00Z', signed_date: '2025-01-14T16:45:00Z', status: 'signed' },
-  { id: 'p5', title: 'Transition and Leaving Care Protocol', category: 'Care Planning', version: '2.3', description: 'Support protocols for young people transitioning to independent living.', last_updated: '2025-01-05T08:30:00Z', due_date: '2025-01-25T00:00:00Z', signed_date: null, status: 'pending' },
-  { id: 'p6', title: 'Listening to Children and Young People', category: 'Views, Wishes and Feelings', version: '2.8', description: 'Ensuring children\'s voices are heard and acted upon.', last_updated: '2024-11-28T09:00:00Z', due_date: '2025-01-12T00:00:00Z', signed_date: '2025-01-08T11:20:00Z', status: 'signed' },
-  { id: 'p7', title: 'Advocacy and Independent Visitor Policy', category: 'Views, Wishes and Feelings', version: '1.9', description: 'Provisions for advocacy services and independent visitors.', last_updated: '2024-12-01T13:00:00Z', due_date: '2025-01-14T00:00:00Z', signed_date: null, status: 'overdue' },
-  { id: 'p8', title: 'Child Protection and Safeguarding Policy 2025', category: 'Child Protection', version: '5.1', description: 'Comprehensive safeguarding policy for children in residential care.', last_updated: '2025-01-12T10:00:00Z', due_date: '2025-01-15T00:00:00Z', signed_date: '2025-01-13T08:45:00Z', status: 'signed' },
-  { id: 'p9', title: 'Allegations Against Staff Procedure', category: 'Child Protection', version: '3.4', description: 'Procedures for handling allegations against staff members.', last_updated: '2024-12-18T11:00:00Z', due_date: '2025-01-20T00:00:00Z', signed_date: '2025-01-16T14:00:00Z', status: 'signed' },
-  { id: 'p10', title: 'Missing from Care Protocol', category: 'Child Protection', version: '2.7', description: 'Steps to follow when a young person goes missing from care.', last_updated: '2024-12-10T15:00:00Z', due_date: '2025-01-22T00:00:00Z', signed_date: '2025-01-18T10:30:00Z', status: 'signed' },
-  { id: 'p11', title: 'Whistleblowing Policy', category: 'Child Protection', version: '2.2', description: 'How to report concerns about organisational practices.', last_updated: '2025-01-06T09:00:00Z', due_date: '2025-01-13T00:00:00Z', signed_date: null, status: 'overdue' },
-  { id: 'p12', title: 'Health and Safety Protocol Revision', category: 'Health and Well-being', version: '4.3', description: 'Updated health and safety procedures for all staff.', last_updated: '2025-01-10T12:00:00Z', due_date: '2025-01-28T00:00:00Z', signed_date: null, status: 'pending' },
-  { id: 'p13', title: 'Medication Administration Policy', category: 'Health and Well-being', version: '3.8', description: 'Guidelines for administering and recording medication.', last_updated: '2024-12-22T10:00:00Z', due_date: '2025-01-16T00:00:00Z', signed_date: '2025-01-14T09:30:00Z', status: 'signed' },
-  { id: 'p14', title: 'Mental Health and Emotional Wellbeing', category: 'Health and Well-being', version: '2.5', description: 'Supporting the mental health of children in care.', last_updated: '2024-12-05T14:00:00Z', due_date: '2025-01-19T00:00:00Z', signed_date: '2025-01-17T11:00:00Z', status: 'signed' },
-  { id: 'p15', title: 'Ofsted Inspection Preparation Guide', category: 'Quality of Care', version: '2.0', description: 'How to prepare and respond to Ofsted inspections.', last_updated: '2025-01-03T09:00:00Z', due_date: '2025-01-21T00:00:00Z', signed_date: null, status: 'pending' },
-  { id: 'p16', title: 'Continuous Improvement Framework', category: 'Quality of Care', version: '1.7', description: 'Framework for ongoing service quality improvement.', last_updated: '2024-11-25T11:00:00Z', due_date: '2025-01-10T00:00:00Z', signed_date: '2025-01-09T15:45:00Z', status: 'signed' },
-  { id: 'p17', title: 'Education and Achievement Support', category: 'Enjoyment and Achievement', version: '2.4', description: 'Supporting educational attainment and personal achievement.', last_updated: '2024-12-12T10:00:00Z', due_date: '2025-01-17T00:00:00Z', signed_date: '2025-01-15T10:00:00Z', status: 'signed' },
-  { id: 'p18', title: 'Leisure Activities and Enrichment Programme', category: 'Enjoyment and Achievement', version: '1.6', description: 'Organising and facilitating recreational activities.', last_updated: '2024-12-08T13:00:00Z', due_date: '2025-01-12T00:00:00Z', signed_date: '2025-01-11T14:20:00Z', status: 'signed' },
-  { id: 'p19', title: 'Positive Behaviour Support Guidelines', category: 'Positive Relationships', version: '3.3', description: 'Evidence-based approaches to positive behaviour support.', last_updated: '2025-01-07T09:00:00Z', due_date: '2025-01-26T00:00:00Z', signed_date: null, status: 'pending' },
-  { id: 'p20', title: 'Restorative Practice and Conflict Resolution', category: 'Positive Relationships', version: '2.1', description: 'Techniques for resolving conflicts and building relationships.', last_updated: '2024-12-14T11:00:00Z', due_date: '2025-01-14T00:00:00Z', signed_date: '2025-01-13T16:30:00Z', status: 'signed' },
-  { id: 'p21', title: 'Fire Safety and Emergency Procedures', category: 'Leadership and Management', version: '4.2', description: 'Emergency response procedures including fire evacuation.', last_updated: '2024-12-28T10:00:00Z', due_date: '2025-01-11T00:00:00Z', signed_date: '2025-01-10T09:00:00Z', status: 'signed' },
-  { id: 'p22', title: 'Staff Supervision and Appraisal Policy', category: 'Leadership and Management', version: '3.0', description: 'Framework for staff supervision and performance review.', last_updated: '2025-01-09T14:00:00Z', due_date: '2025-01-23T00:00:00Z', signed_date: '2025-01-20T11:45:00Z', status: 'signed' },
-  { id: 'p23', title: 'Data Handling and GDPR Compliance', category: 'GDPR', version: '3.6', description: 'Data protection compliance and handling procedures.', last_updated: '2025-01-11T08:00:00Z', due_date: '2025-01-14T00:00:00Z', signed_date: null, status: 'overdue' },
-  { id: 'p24', title: 'CCTV and Digital Surveillance Policy', category: 'GDPR', version: '2.3', description: 'Use of CCTV and digital monitoring in the care setting.', last_updated: '2024-12-16T09:00:00Z', due_date: '2025-01-18T00:00:00Z', signed_date: '2025-01-16T13:15:00Z', status: 'signed' },
-]
-
-const CATEGORIES = [
-  'All',
-  'COVID-19',
-  'Care Planning',
-  'Views, Wishes and Feelings',
-  'Child Protection',
-  'Health and Well-being',
-  'Quality of Care',
-  'Enjoyment and Achievement',
-  'Positive Relationships',
-  'Leadership and Management',
-  'GDPR',
-]
+const CATEGORIES = ['All', ...POLICY_CATEGORIES]
 
 const PAGE_SIZE = 12
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
-function policyToCardPolicy(policy: MockPolicy) {
+function isOverdue(lastUpdated: string): boolean {
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  return new Date(lastUpdated) < thirtyDaysAgo
+}
+
+interface PolicyWithStatus extends Policy {
+  status: 'signed' | 'pending' | 'overdue'
+}
+
+function policyToCardPolicy(policy: PolicyWithStatus) {
   return {
     id: policy.id,
     title: policy.title,
     category: policy.category,
     version: policy.version,
     description: policy.description,
-    pdf_url: '',
-    upload_date: policy.last_updated,
+    pdf_url: policy.pdf_url,
+    upload_date: policy.upload_date,
     last_updated: policy.last_updated,
-    requires_acknowledgement: true,
-    active: true,
-    created_at: policy.last_updated,
+    requires_acknowledgement: policy.requires_acknowledgement,
+    active: policy.active,
+    created_at: policy.created_at,
   }
 }
 
@@ -194,11 +157,11 @@ function Dropdown({
   )
 }
 
-function PolicyRowCard({ policy }: { policy: MockPolicy }) {
-  const borderColor = policy.status === 'signed' ? 'border-l-primary-500' : policy.status === 'overdue' ? 'border-l-error-500' : 'border-l-warning-500'
-  const dueLabel = policy.status === 'signed'
-    ? `Signed: ${policy.signed_date ? format(new Date(policy.signed_date), 'd MMM yyyy') : 'N/A'}`
-    : `Due: ${format(new Date(policy.due_date), 'd MMM yyyy')}`
+function PolicyRowCard({ policy, status }: { policy: Policy; status: 'signed' | 'pending' | 'overdue' }) {
+  const borderColor = status === 'signed' ? 'border-l-primary-500' : status === 'overdue' ? 'border-l-error-500' : 'border-l-warning-500'
+  const dueLabel = status === 'signed'
+    ? `Updated: ${format(new Date(policy.last_updated), 'd MMM yyyy')}`
+    : `Updated: ${format(new Date(policy.last_updated), 'd MMM yyyy')}`
 
   return (
     <Link
@@ -230,11 +193,11 @@ function PolicyRowCard({ policy }: { policy: MockPolicy }) {
 
       {/* Status */}
       <div className="hidden sm:flex items-center gap-4 shrink-0">
-        <StatusBadge variant={policy.status} />
+        <StatusBadge variant={status} />
         <span className="font-mono text-[13px] text-neutral-400 w-32 text-right">
           {dueLabel}
         </span>
-        {policy.status === 'pending' || policy.status === 'overdue' ? (
+        {status === 'pending' || status === 'overdue' ? (
           <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-body font-medium bg-accent-600 text-white hover:bg-accent-700 transition-colors">
             View & Sign
             <ChevronRight size={14} className="ml-1" />
@@ -320,33 +283,97 @@ function Pagination({
 
 // ─── Main PolicyList Component ───────────────────────────────────────────
 export default function PolicyList() {
+  const { user } = useAuth()
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('All')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [sortBy, setSortBy] = useState<SortOption>('due_date')
   const [currentPage, setCurrentPage] = useState(1)
   const [mounted, setMounted] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [policies, setPolicies] = useState<Policy[]>([])
+  const [acknowledgements, setAcknowledgements] = useState<Acknowledgement[]>([])
 
   useEffect(() => {
     const timer = setTimeout(() => setMounted(true), 50)
     return () => clearTimeout(timer)
   }, [])
 
+  // Fetch data from Supabase
+  useEffect(() => {
+    async function fetchData() {
+      if (!user?.id) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Fetch all active policies
+        const { data: policiesData, error: policiesError } = await supabase
+          .from('policies')
+          .select('*')
+          .eq('active', true)
+
+        if (policiesError) throw policiesError
+
+        // Fetch user's acknowledgements
+        const { data: ackData, error: ackError } = await supabase
+          .from('acknowledgements')
+          .select('*')
+          .eq('staff_id', user.id)
+
+        if (ackError) throw ackError
+
+        setPolicies(policiesData || [])
+        setAcknowledgements(ackData || [])
+      } catch (err: any) {
+        console.error('Error fetching policies:', err)
+        setError(err.message || 'Failed to load policies')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [user?.id])
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1)
   }, [search, activeCategory, statusFilter, sortBy])
 
+  // Build set of signed policy IDs
+  const signedPolicyIds = useMemo(() => {
+    return new Set(acknowledgements.map(a => a.policy_id))
+  }, [acknowledgements])
+
+  // Add status to each policy
+  const policiesWithStatus: PolicyWithStatus[] = useMemo(() => {
+    return policies.map(p => {
+      const isSigned = signedPolicyIds.has(p.id)
+      const status: 'signed' | 'pending' | 'overdue' = isSigned
+        ? 'signed'
+        : isOverdue(p.last_updated)
+          ? 'overdue'
+          : 'pending'
+      return { ...p, status }
+    })
+  }, [policies, signedPolicyIds])
+
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = { All: MOCK_POLICIES.length }
-    CATEGORIES.slice(1).forEach(cat => {
-      counts[cat] = MOCK_POLICIES.filter(p => p.category === cat).length
+    const counts: Record<string, number> = { All: policies.length }
+    POLICY_CATEGORIES.forEach(cat => {
+      counts[cat] = policies.filter(p => p.category === cat).length
     })
     return counts
-  }, [])
+  }, [policies])
 
   const filteredPolicies = useMemo(() => {
-    let result = [...MOCK_POLICIES]
+    let result = [...policiesWithStatus]
 
     // Search
     if (search.trim()) {
@@ -375,7 +402,7 @@ export default function PolicyList() {
           const aPrio = a.status === 'overdue' ? 0 : a.status === 'pending' ? 1 : 2
           const bPrio = b.status === 'overdue' ? 0 : b.status === 'pending' ? 1 : 2
           if (aPrio !== bPrio) return aPrio - bPrio
-          return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+          return new Date(a.last_updated).getTime() - new Date(b.last_updated).getTime()
         }
         case 'updated':
           return new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime()
@@ -389,7 +416,7 @@ export default function PolicyList() {
     })
 
     return result
-  }, [search, activeCategory, statusFilter, sortBy])
+  }, [policiesWithStatus, search, activeCategory, statusFilter, sortBy])
 
   const totalPages = Math.ceil(filteredPolicies.length / PAGE_SIZE)
   const paginatedPolicies = filteredPolicies.slice(
@@ -419,6 +446,31 @@ export default function PolicyList() {
   }
 
   const hasActiveFilters = search || activeCategory !== 'All' || statusFilter !== 'all'
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 size={40} className="text-primary-500 animate-spin mb-4" />
+        <p className="font-body text-sm text-neutral-500">Loading policies...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <AlertTriangle size={40} className="text-error-500 mb-4" />
+        <p className="font-body text-base text-neutral-700 font-medium">Failed to load policies</p>
+        <p className="font-body text-sm text-neutral-500 mt-1">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-body font-medium hover:bg-primary-700 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -530,12 +582,12 @@ export default function PolicyList() {
                 ].join(' ')}
                 style={{ transitionDelay: `${i * 40}ms` }}
               >
-                <PolicyRowCard policy={policy} />
+                <PolicyRowCard policy={policy} status={policy.status} />
               </div>
             ))}
           </div>
 
-          {/* Card Grid View (alternative - below list on larger screens, or responsive) */}
+          {/* Card Grid View */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
             {paginatedPolicies.map((policy, i) => (
               <div

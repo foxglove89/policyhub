@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import type { Policy } from '@/types'
 import { POLICY_CATEGORIES } from '@/types'
+import { supabase } from '@/lib/supabase'
 import DataTable from '@/components/DataTable'
 import {
   Search,
@@ -15,6 +16,8 @@ import {
   Archive,
   Check,
   FolderOpen,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react'
 import { format } from 'date-fns'
 
@@ -60,64 +63,6 @@ const CATEGORY_COLORS: Record<string, string> = {
 function getCategoryColor(category: string): string {
   return CATEGORY_COLORS[category] ?? 'bg-neutral-100 text-neutral-600 border-neutral-200'
 }
-
-/* ------------------------------------------------------------------ */
-/*  Mock Data — 24 policies across 10 categories                       */
-/* ------------------------------------------------------------------ */
-
-function createMockPolicies(): PolicyWithCounts[] {
-  const titles: [string, string, string, boolean, boolean][] = [
-    ['COVID-19 Isolation Protocols', 'COVID-19', '3.2', true, true],
-    ['COVID-19 Vaccination Policy', 'COVID-19', '2.1', true, false],
-    ['Care Planning Assessment Guide', 'Care Planning', '4.0', true, true],
-    ['Individual Care Plan Template', 'Care Planning', '3.5', true, true],
-    ['Young Person Views and Wishes', 'Views, Wishes and Feelings', '2.3', true, true],
-    ['Participation in Decision Making', 'Views, Wishes and Feelings', '1.8', true, true],
-    ['Safeguarding and Child Protection', 'Child Protection', '5.1', true, true],
-    ['Allegations Management Procedure', 'Child Protection', '2.4', true, true],
-    ['Missing from Care Protocol', 'Child Protection', '3.0', true, true],
-    ['Health Needs Assessment', 'Health and Well-being', '2.7', true, true],
-    ['Mental Health Support Framework', 'Health and Well-being', '1.9', true, true],
-    ['Medication Administration Policy', 'Health and Well-being', '4.2', true, true],
-    ['Quality Assurance Framework', 'Quality of Care', '3.3', true, true],
-    ['Inspection Preparation Guide', 'Quality of Care', '2.0', true, false],
-    ['Activities and Enrichment Programme', 'Enjoyment and Achievement', '3.6', true, true],
-    ['Education Support Policy', 'Enjoyment and Achievement', '2.2', true, true],
-    ['Restorative Practice Guide', 'Positive Relationships', '1.5', true, true],
-    ['Conflict Resolution Framework', 'Positive Relationships', '2.1', true, true],
-    ['Staff Supervision Policy', 'Leadership and Management', '4.0', true, true],
-    ['Whistleblowing Procedure', 'Leadership and Management', '3.1', true, true],
-    ['Complaints Handling Policy', 'Leadership and Management', '2.8', true, true],
-    ['Data Protection and GDPR Policy', 'GDPR', '4.0', true, true],
-    ['Subject Access Request Procedure', 'GDPR', '2.5', true, true],
-    ['ICT Acceptable Use Policy', 'GDPR', '3.0', false, false],
-  ]
-
-  const baseDate = new Date('2024-01-01')
-
-  return titles.map(([title, category, version, requires_ack, active], i) => {
-    const totalStaff = 16
-    const signed = active ? Math.floor(Math.random() * totalStaff * 0.8) + 3 : 0
-    return {
-      id: `policy-${i + 1}`,
-      title,
-      category,
-      version,
-      description: `This policy outlines the procedures, guidelines, and responsibilities for ${title.toLowerCase()} within Foxglove Management Ltd. All staff must familiarise themselves with the contents and adhere to the standards set forth.`,
-      pdf_url: `/policies/policy-${i + 1}.pdf`,
-      upload_date: format(new Date(baseDate.getTime() + i * 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-      last_updated: format(new Date(baseDate.getTime() + (i + 10) * 7 * 24 * 60 * 60 * 1000), 'yyyy-MM-dd'),
-      requires_acknowledgement: requires_ack,
-      active,
-      created_at: new Date().toISOString(),
-      signed_count: signed,
-      total_staff: totalStaff,
-      status: active ? 'active' as const : 'inactive' as const,
-    }
-  })
-}
-
-const INITIAL_POLICIES = createMockPolicies()
 
 /* ------------------------------------------------------------------ */
 /*  Toast                                                              */
@@ -343,7 +288,7 @@ function UploadPolicyModal({
 }: {
   open: boolean
   onClose: () => void
-  onUpload: (policy: Omit<PolicyWithCounts, 'id' | 'upload_date' | 'last_updated' | 'created_at'>) => void
+  onUpload: (policy: Omit<PolicyWithCounts, 'id' | 'upload_date' | 'last_updated' | 'created_at'>) => Promise<void>
 }) {
   const [step, setStep] = useState(0)
   const [file, setFile] = useState<File | null>(null)
@@ -355,6 +300,7 @@ function UploadPolicyModal({
   const [requiresAck, setRequiresAck] = useState(true)
   const [assignAll, setAssignAll] = useState(true)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [submitting, setSubmitting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const reset = () => {
@@ -376,8 +322,9 @@ function UploadPolicyModal({
   }
 
   const validateStep1 = () => {
-    if (!file) { setErrors({ file: 'Please upload a PDF file' }); return false }
-    setErrors({}); return true
+    // Allow proceeding without file for now - PDF upload to Storage is TODO
+    setErrors({})
+    return true
   }
 
   const validateStep2 = () => {
@@ -395,19 +342,25 @@ function UploadPolicyModal({
 
   const handleBack = () => setStep((s) => Math.max(0, s - 1))
 
-  const handlePublish = () => {
-    onUpload({
-      title: title.trim(),
-      category,
-      version: version.trim(),
-      description: description.trim(),
-      pdf_url: `/policies/${file?.name ?? 'document.pdf'}`,
-      requires_acknowledgement: requiresAck,
-      active: true,
-      signed_count: 0,
-      total_staff: 16,
-      status: 'active',
-    })
+  const handlePublish = async () => {
+    setSubmitting(true)
+    try {
+      await onUpload({
+        title: title.trim(),
+        category,
+        version: version.trim(),
+        description: description.trim(),
+        // TODO: Upload PDF file to Supabase Storage and store the URL here
+        pdf_url: file ? `/policies/${file.name}` : '',
+        requires_acknowledgement: requiresAck,
+        active: true,
+        signed_count: 0,
+        total_staff: 16,
+        status: 'active',
+      })
+    } finally {
+      setSubmitting(false)
+    }
     handleClose()
   }
 
@@ -474,12 +427,19 @@ function UploadPolicyModal({
                   Drag and drop your PDF here
                 </p>
                 <p className="text-sm font-body text-accent-600 mt-1">or click to browse files</p>
-                <p className="text-[11px] font-body text-neutral-400 mt-2">Maximum file size: 50MB</p>
+                <p className="text-[11px] font-body text-neutral-400 mt-2">Maximum file size: 50MB (optional - you can skip this)</p>
               </>
             )}
             <input ref={fileInputRef} type="file" accept=".pdf,application/pdf" onChange={handleFileSelect} className="hidden" />
           </div>
           {errors.file && <p className="text-xs font-body text-error-500">{errors.file}</p>}
+
+          {/* TODO note */}
+          <div className="bg-info-50 border border-info-200 rounded-lg p-3">
+            <p className="text-xs font-body text-info-600">
+              <strong>Note:</strong> PDF upload to Supabase Storage coming soon. You can publish the policy metadata now and upload the file later.
+            </p>
+          </div>
 
           <div className="flex justify-end gap-3 pt-2">
             <button
@@ -609,7 +569,7 @@ function UploadPolicyModal({
               </div>
               <div>
                 <span className="text-xs font-body text-neutral-400">File</span>
-                <p className="font-body text-neutral-700">{file?.name}</p>
+                <p className="font-body text-neutral-700">{file?.name || 'None (will be added later)'}</p>
               </div>
               <div>
                 <span className="text-xs font-body text-neutral-400">Requires Acknowledgement</span>
@@ -629,7 +589,7 @@ function UploadPolicyModal({
                 <input type="radio" checked={assignAll} onChange={() => setAssignAll(true)} className="sr-only" />
                 <div>
                   <p className="text-sm font-medium font-body text-neutral-700">All Staff</p>
-                  <p className="text-xs font-body text-neutral-400">Assign to all 16 staff members</p>
+                  <p className="text-xs font-body text-neutral-400">Assign to all staff members</p>
                 </div>
               </label>
               <label className="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 hover:bg-neutral-50 cursor-pointer transition-colors">
@@ -639,7 +599,7 @@ function UploadPolicyModal({
                 <input type="radio" checked={!assignAll} onChange={() => setAssignAll(false)} className="sr-only" />
                 <div>
                   <p className="text-sm font-medium font-body text-neutral-700">Select Specific Staff</p>
-                  <p className="text-xs font-body text-neutral-400">Choose individual staff or departments</p>
+                  <p className="text-xs font-body text-neutral-400">Choose individual staff or departments (coming soon)</p>
                 </div>
               </label>
             </div>
@@ -655,9 +615,17 @@ function UploadPolicyModal({
             </button>
             <button
               onClick={handlePublish}
-              className="px-5 h-11 rounded-lg bg-primary-600 text-white text-sm font-body font-medium hover:bg-primary-700 transition-colors"
+              disabled={submitting}
+              className="px-5 h-11 rounded-lg bg-primary-600 text-white text-sm font-body font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              Publish Policy
+              {submitting ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Publishing...
+                </>
+              ) : (
+                'Publish Policy'
+              )}
             </button>
           </div>
         </div>
@@ -679,7 +647,7 @@ function EditPolicyModal({
   open: boolean
   onClose: () => void
   policy: PolicyWithCounts | null
-  onSave: (id: string, updates: Partial<PolicyWithCounts>) => void
+  onSave: (id: string, updates: Partial<PolicyWithCounts>) => Promise<void>
 }) {
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('')
@@ -688,6 +656,7 @@ function EditPolicyModal({
   const [requiresAck, setRequiresAck] = useState(true)
   const [active, setActive] = useState(true)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (policy) {
@@ -711,17 +680,22 @@ function EditPolicyModal({
     return Object.keys(e).length === 0
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return
-    onSave(policy.id, {
-      title: title.trim(),
-      category,
-      version: version.trim(),
-      description: description.trim(),
-      requires_acknowledgement: requiresAck,
-      status: active ? 'active' : 'inactive',
-      active,
-    })
+    setSubmitting(true)
+    try {
+      await onSave(policy.id, {
+        title: title.trim(),
+        category,
+        version: version.trim(),
+        description: description.trim(),
+        requires_acknowledgement: requiresAck,
+        status: active ? 'active' : 'inactive',
+        active,
+      })
+    } finally {
+      setSubmitting(false)
+    }
     onClose()
   }
 
@@ -810,9 +784,17 @@ function EditPolicyModal({
           </button>
           <button
             onClick={handleSubmit}
-            className="px-5 h-11 rounded-lg bg-primary-600 text-white text-sm font-body font-medium hover:bg-primary-700 transition-colors"
+            disabled={submitting}
+            className="px-5 h-11 rounded-lg bg-primary-600 text-white text-sm font-body font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            Save Changes
+            {submitting ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Saving...
+              </>
+            ) : (
+              'Save Changes'
+            )}
           </button>
         </div>
       </div>
@@ -884,12 +866,13 @@ function DropdownDivider() {
 /* ------------------------------------------------------------------ */
 
 export default function PolicyManagement() {
-  const [policies, setPolicies] = useState<PolicyWithCounts[]>(INITIAL_POLICIES)
+  const [policies, setPolicies] = useState<PolicyWithCounts[]>([])
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [ackFilter, setAckFilter] = useState<'all' | 'required' | 'not_required'>('all')
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [loading, setLoading] = useState(true)
 
   const [uploadOpen, setUploadOpen] = useState(false)
   const [editPolicy, setEditPolicy] = useState<PolicyWithCounts | null>(null)
@@ -906,62 +889,196 @@ export default function PolicyManagement() {
     setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
-  const handleUpload = useCallback(
-    (data: Omit<PolicyWithCounts, 'id' | 'upload_date' | 'last_updated' | 'created_at'>) => {
-      const now = new Date().toISOString()
-      const newPolicy: PolicyWithCounts = {
-        ...data,
-        id: generateId(),
-        upload_date: now,
-        last_updated: now,
-        created_at: now,
+  // Fetch policies from Supabase
+  useEffect(() => {
+    async function fetchPolicies() {
+      try {
+        setLoading(true)
+
+        // Fetch all policies
+        const { data: policiesData, error: policiesError } = await supabase
+          .from('policies')
+          .select('*')
+          .order('created_at', { ascending: false })
+
+        if (policiesError) throw policiesError
+
+        // Fetch total staff count
+        const { count: staffCount, error: staffError } = await supabase
+          .from('staff')
+          .select('*', { count: 'exact', head: true })
+          .eq('active', true)
+
+        if (staffError) throw staffError
+
+        // Fetch acknowledgement counts per policy
+        const { data: ackData, error: ackError } = await supabase
+          .from('acknowledgements')
+          .select('policy_id')
+
+        if (ackError) throw ackError
+
+        const ackCounts: Record<string, number> = {}
+        ackData?.forEach((ack: any) => {
+          ackCounts[ack.policy_id] = (ackCounts[ack.policy_id] || 0) + 1
+        })
+
+        const totalStaff = staffCount || 0
+
+        const mapped: PolicyWithCounts[] = (policiesData || []).map((p: any) => ({
+          ...p,
+          signed_count: ackCounts[p.id] || 0,
+          total_staff: totalStaff,
+          status: p.active ? 'active' as const : 'inactive' as const,
+        }))
+
+        setPolicies(mapped)
+      } catch (err: any) {
+        console.error('Error fetching policies:', err)
+        addToast(`Failed to load policies: ${err.message}`, 'error')
+      } finally {
+        setLoading(false)
       }
-      setPolicies((prev) => [newPolicy, ...prev])
-      addToast(`"${data.title}" has been published successfully`)
+    }
+
+    fetchPolicies()
+  }, [addToast])
+
+  const handleUpload = useCallback(
+    async (data: Omit<PolicyWithCounts, 'id' | 'upload_date' | 'last_updated' | 'created_at'>) => {
+      try {
+        const now = new Date().toISOString()
+
+        // Insert into Supabase
+        const { data: newPolicy, error: insertError } = await supabase
+          .from('policies')
+          .insert({
+            title: data.title,
+            category: data.category,
+            version: data.version,
+            description: data.description,
+            pdf_url: data.pdf_url,
+            requires_acknowledgement: data.requires_acknowledgement,
+            active: data.active,
+            upload_date: now,
+            last_updated: now,
+          })
+          .select()
+          .single()
+
+        if (insertError) throw insertError
+
+        const totalStaff = policies[0]?.total_staff || 16
+        const policyWithCounts: PolicyWithCounts = {
+          ...newPolicy,
+          signed_count: 0,
+          total_staff: totalStaff,
+          status: 'active',
+        }
+
+        setPolicies((prev) => [policyWithCounts, ...prev])
+        addToast(`"${data.title}" has been published successfully`)
+      } catch (err: any) {
+        console.error('Error uploading policy:', err)
+        addToast(`Failed to publish: ${err.message}`, 'error')
+      }
     },
-    [addToast]
+    [addToast, policies]
   )
 
   const handleEditSave = useCallback(
-    (id: string, updates: Partial<PolicyWithCounts>) => {
-      setPolicies((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, ...updates, last_updated: new Date().toISOString() } : p))
-      )
-      addToast('Policy updated successfully')
+    async (id: string, updates: Partial<PolicyWithCounts>) => {
+      try {
+        const { error } = await supabase
+          .from('policies')
+          .update({
+            ...updates,
+            last_updated: new Date().toISOString(),
+          })
+          .eq('id', id)
+
+        if (error) throw error
+
+        setPolicies((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, ...updates, last_updated: new Date().toISOString() } : p))
+        )
+        addToast('Policy updated successfully')
+      } catch (err: any) {
+        console.error('Error updating policy:', err)
+        addToast(`Failed to update: ${err.message}`, 'error')
+      }
     },
     [addToast]
   )
 
   const handleDeactivate = useCallback(
-    (id: string) => {
-      setPolicies((prev) =>
-        prev.map((p) =>
-          p.id === id
-            ? { ...p, status: 'inactive' as const, active: false, last_updated: new Date().toISOString() }
-            : p
+    async (id: string) => {
+      try {
+        const { error } = await supabase
+          .from('policies')
+          .update({
+            status: 'inactive',
+            active: false,
+            last_updated: new Date().toISOString(),
+          })
+          .eq('id', id)
+
+        if (error) throw error
+
+        setPolicies((prev) =>
+          prev.map((p) =>
+            p.id === id
+              ? { ...p, status: 'inactive' as const, active: false, last_updated: new Date().toISOString() }
+              : p
+          )
         )
-      )
-      addToast('Policy has been deactivated')
+        addToast('Policy has been deactivated')
+      } catch (err: any) {
+        console.error('Error deactivating policy:', err)
+        addToast(`Failed: ${err.message}`, 'error')
+      }
     },
     [addToast]
   )
 
   const handleToggleStatus = useCallback(
-    (id: string) => {
-      setPolicies((prev) =>
-        prev.map((p) => {
-          if (p.id !== id) return p
-          const newActive = p.status === 'inactive'
-          return {
-            ...p,
-            status: newActive ? 'active' as const : 'inactive' as const,
+    async (id: string) => {
+      const policy = policies.find((p) => p.id === id)
+      if (!policy) return
+
+      const newActive = policy.status === 'inactive'
+
+      try {
+        const { error } = await supabase
+          .from('policies')
+          .update({
+            status: newActive ? 'active' : 'inactive',
             active: newActive,
             last_updated: new Date().toISOString(),
-          }
-        })
-      )
+          })
+          .eq('id', id)
+
+        if (error) throw error
+
+        setPolicies((prev) =>
+          prev.map((p) => {
+            if (p.id !== id) return p
+            return {
+              ...p,
+              status: newActive ? 'active' as const : 'inactive' as const,
+              active: newActive,
+              last_updated: new Date().toISOString(),
+            }
+          })
+        )
+
+        addToast(newActive ? 'Policy has been activated' : 'Policy has been deactivated')
+      } catch (err: any) {
+        console.error('Error toggling policy status:', err)
+        addToast(`Failed: ${err.message}`, 'error')
+      }
     },
-    []
+    [policies, addToast]
   )
 
   /* Stats */
@@ -1142,6 +1259,15 @@ export default function PolicyManagement() {
     policies.forEach((p) => { counts[p.category] = (counts[p.category] || 0) + 1 })
     return counts
   }, [policies])
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 size={40} className="text-primary-500 animate-spin mb-4" />
+        <p className="font-body text-sm text-neutral-500">Loading policies...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="animate-in fade-in duration-500">

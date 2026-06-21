@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell,
@@ -6,99 +6,38 @@ import {
 import { format } from 'date-fns'
 import {
   Download, FileText, Printer, ChevronDown, RefreshCw,
-  Search, Bell,
+  Search, Bell, Loader2, AlertTriangle,
 } from 'lucide-react'
+import { supabase } from '@/lib/supabase'
 import StatusBadge from '@/components/StatusBadge'
 import DataTable from '@/components/DataTable'
 
-/* ───────────────────── mock data ───────────────────── */
+/* ───────────────────── Types ───────────────────── */
 
-const STAFF = [
-  { id: 's1', name: 'Uzair Saeed', role: 'admin', department: 'GRC', signed: 24, total: 24 },
-  { id: 's2', name: 'Andy Brierley', role: 'admin', department: 'Management', signed: 24, total: 24 },
-  { id: 's3', name: 'Jason Wilson', role: 'admin', department: 'Management', signed: 23, total: 24 },
-  { id: 's4', name: 'Isabel McTaggart', role: 'admin', department: 'Senior Care', signed: 22, total: 24 },
-  { id: 's5', name: 'Prince Nosa Osaru', role: 'staff', department: 'Care Team', signed: 21, total: 24 },
-  { id: 's6', name: 'Nicholas Aladejana', role: 'staff', department: 'Care Team', signed: 20, total: 24 },
-  { id: 's7', name: 'Ranjeet Singh', role: 'staff', department: 'Care Team', signed: 19, total: 24 },
-  { id: 's8', name: 'Charlotte Wheaver', role: 'staff', department: 'Care Team', signed: 18, total: 24 },
-  { id: 's9', name: 'Rachael Scott', role: 'staff', department: 'Care Team', signed: 17, total: 24 },
-  { id: 's10', name: 'Tara Willis', role: 'staff', department: 'Care Team', signed: 16, total: 24 },
-  { id: 's11', name: 'Yvonne Magura', role: 'staff', department: 'Care Team', signed: 15, total: 24 },
-  { id: 's12', name: "Dominic O'Pere", role: 'staff', department: 'Care Team', signed: 14, total: 24 },
-  { id: 's13', name: 'Benjamin Oghenegueke', role: 'staff', department: 'Care Team', signed: 12, total: 24 },
-  { id: 's14', name: 'Christina Charalambous', role: 'staff', department: 'Care Team', signed: 10, total: 24 },
-  { id: 's15', name: 'Najjuma Katende', role: 'staff', department: 'Care Team', signed: 9, total: 24 },
-  { id: 's16', name: 'Shauna Wintour', role: 'staff', department: 'Care Team', signed: 6, total: 24 },
-]
+interface StaffWithStatus {
+  id: string
+  name: string
+  role: string
+  department: string
+  total: number
+  signed: number
+  pending: number
+  pct: number
+  status: 'signed' | 'pending' | 'overdue'
+}
 
-const POLICIES = [
-  { id: 'p1', title: 'GDPR Data Protection Policy', category: 'GDPR', totalStaff: 16, signed: 16, pending: 0, lastSigned: '2025-01-12' },
-  { id: 'p2', title: 'COVID-19 Safety Protocols', category: 'COVID-19', totalStaff: 16, signed: 15, pending: 1, lastSigned: '2025-01-10' },
-  { id: 'p3', title: 'Fire Safety & Evacuation', category: 'Care Planning', totalStaff: 16, signed: 14, pending: 2, lastSigned: '2025-01-08' },
-  { id: 'p4', title: 'Child Safeguarding Policy', category: 'Child Protection', totalStaff: 16, signed: 14, pending: 2, lastSigned: '2025-01-09' },
-  { id: 'p5', title: 'Health & Well-being Standards', category: 'Health and Well-being', totalStaff: 16, signed: 13, pending: 3, lastSigned: '2025-01-07' },
-  { id: 'p6', title: 'Positive Behaviour Support', category: 'Positive Relationships', totalStaff: 16, signed: 13, pending: 3, lastSigned: '2025-01-06' },
-  { id: 'p7', title: 'Care Planning & Reviews', category: 'Care Planning', totalStaff: 16, signed: 14, pending: 2, lastSigned: '2025-01-11' },
-  { id: 'p8', title: 'Quality of Care Framework', category: 'Quality of Care', totalStaff: 16, signed: 14, pending: 2, lastSigned: '2025-01-05' },
-  { id: 'p9', title: 'Views, Wishes & Feelings', category: 'Views, Wishes and Feelings', totalStaff: 16, signed: 13, pending: 3, lastSigned: '2025-01-04' },
-  { id: 'p10', title: 'Leadership & Management Policy', category: 'Leadership and Management', totalStaff: 16, signed: 15, pending: 1, lastSigned: '2025-01-10' },
-  { id: 'p11', title: 'Data Breach Response', category: 'GDPR', totalStaff: 16, signed: 16, pending: 0, lastSigned: '2025-01-12' },
-  { id: 'p12', title: 'Infection Control Pandemic', category: 'COVID-19', totalStaff: 16, signed: 15, pending: 1, lastSigned: '2025-01-09' },
-  { id: 'p13', title: 'Risk Assessment Procedures', category: 'Care Planning', totalStaff: 16, signed: 14, pending: 2, lastSigned: '2025-01-08' },
-  { id: 'p14', title: 'Whistleblowing Policy', category: 'Child Protection', totalStaff: 16, signed: 13, pending: 3, lastSigned: '2025-01-06' },
-  { id: 'p15', title: 'Mental Health Support', category: 'Health and Well-being', totalStaff: 16, signed: 13, pending: 3, lastSigned: '2025-01-05' },
-  { id: 'p16', title: 'Education & Activities Policy', category: 'Enjoyment and Achievement', totalStaff: 16, signed: 14, pending: 2, lastSigned: '2025-01-07' },
-  { id: 'p17', title: 'Restraint Reduction Policy', category: 'Positive Relationships', totalStaff: 16, signed: 13, pending: 3, lastSigned: '2025-01-04' },
-  { id: 'p18', title: 'Medication Administration', category: 'Care Planning', totalStaff: 16, signed: 14, pending: 2, lastSigned: '2025-01-09' },
-  { id: 'p19', title: 'Ofsted Inspection Readiness', category: 'Quality of Care', totalStaff: 16, signed: 14, pending: 2, lastSigned: '2025-01-08' },
-  { id: 'p20', title: 'Staff Supervision Policy', category: 'Leadership and Management', totalStaff: 16, signed: 15, pending: 1, lastSigned: '2025-01-11' },
-  { id: 'p21', title: 'Equal Opportunities', category: 'Enjoyment and Achievement', totalStaff: 16, signed: 14, pending: 2, lastSigned: '2025-01-06' },
-  { id: 'p22', title: 'Missing From Care Protocol', category: 'Child Protection', totalStaff: 16, signed: 12, pending: 4, lastSigned: '2025-01-03' },
-  { id: 'p23', title: 'First Aid & Emergency Care', category: 'Health and Well-being', totalStaff: 16, signed: 13, pending: 3, lastSigned: '2025-01-05' },
-  { id: 'p24', title: 'Recording & Information Sharing', category: 'Views, Wishes and Feelings', totalStaff: 16, signed: 13, pending: 3, lastSigned: '2025-01-04' },
-]
+interface PolicyWithStats {
+  id: string
+  title: string
+  category: string
+  totalStaff: number
+  signed: number
+  pending: number
+  lastSigned: string
+  pct: number
+}
 
-const CATEGORY_COMPLIANCE = [
-  { name: 'GDPR', pct: 100 },
-  { name: 'COVID-19', pct: 93 },
-  { name: 'Leadership and Management', pct: 90 },
-  { name: 'Quality of Care', pct: 88 },
-  { name: 'Care Planning', pct: 87 },
-  { name: 'Enjoyment and Achievement', pct: 85 },
-  { name: 'Health and Well-being', pct: 82 },
-  { name: 'Views, Wishes and Feelings', pct: 78 },
-  { name: 'Positive Relationships', pct: 75 },
-  { name: 'Child Protection', pct: 72 },
-]
-
-const COMPLIANCE_TREND = [
-  { month: 'Aug', pct: 72 },
-  { month: 'Sep', pct: 75 },
-  { month: 'Oct', pct: 78 },
-  { month: 'Nov', pct: 80 },
-  { month: 'Dec', pct: 83 },
-  { month: 'Jan', pct: 87 },
-]
-
-const WEEKLY_ACTIVITY = [
-  { week: 'W1', signings: 8 },
-  { week: 'W2', signings: 12 },
-  { week: 'W3', signings: 15 },
-  { week: 'W4', signings: 24 },
-]
-
-const OVERDUE_BY_STAFF = [
-  { name: 'Shauna Wintour', overdue: 6, initials: 'SW' },
-  { name: 'Najjuma Katende', overdue: 3, initials: 'NK' },
-  { name: 'Christina Charalambous', overdue: 2, initials: 'CC' },
-  { name: 'Benjamin Oghenegueke', overdue: 2, initials: 'BO' },
-  { name: 'Yvonne Magura', overdue: 1, initials: 'YM' },
-]
-
-const PIE_COLORS = ['#22c55e', '#f59e0b', '#ef4444']
-
-/* ─────────── helpers ─────────── */
+/* ───────────────────── helpers ───────────────────── */
 
 function getInitials(name: string) {
   return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)
@@ -116,6 +55,14 @@ function getStatus(pct: number): 'signed' | 'pending' | 'overdue' {
   return 'overdue'
 }
 
+function isOverdue(lastUpdated: string): boolean {
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  return new Date(lastUpdated) < thirtyDaysAgo
+}
+
+const PIE_COLORS = ['#22c55e', '#f59e0b', '#ef4444']
+
 /* ════════════════════════ COMPONENT ════════════════════════ */
 
 type DatePreset = '30' | '90' | '365' | 'all'
@@ -125,49 +72,206 @@ export default function ComplianceReports() {
   const [searchQuery, setSearchQuery] = useState('')
   const [exportOpen, setExportOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const [policies, setPolicies] = useState<any[]>([])
+  const [staff, setStaff] = useState<StaffWithStatus[]>([])
+  const [acknowledgements, setAcknowledgements] = useState<any[]>([])
+  const [allAcknowledgements, setAllAcknowledgements] = useState<any[]>([])
+
+  // Fetch all data
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true)
+
+        // Fetch all active policies
+        const { data: policiesData, error: policiesError } = await supabase
+          .from('policies')
+          .select('*')
+          .eq('active', true)
+
+        if (policiesError) throw policiesError
+        setPolicies(policiesData || [])
+
+        // Fetch all active staff
+        const { data: staffData, error: staffError } = await supabase
+          .from('staff')
+          .select('*')
+          .eq('active', true)
+
+        if (staffError) throw staffError
+
+        // Fetch all acknowledgements
+        const { data: ackData, error: ackError } = await supabase
+          .from('acknowledgements')
+          .select('*, staff:staff(name), policy:policies(title)')
+
+        if (ackError) throw ackError
+        setAllAcknowledgements(ackData || [])
+
+        const totalPoliciesCount = (policiesData || []).length
+        const totalStaffCount = (staffData || []).length
+
+        // Build staff with status
+        const staffWithStatus: StaffWithStatus[] = (staffData || []).map((s: any) => {
+          const signedCount = (ackData || []).filter((a: any) => a.staff_id === s.id).length
+          const pendingCount = totalPoliciesCount - signedCount
+          const pct = totalPoliciesCount > 0 ? Math.round((signedCount / totalPoliciesCount) * 100) : 0
+          return {
+            id: s.id,
+            name: s.name,
+            role: s.role,
+            department: s.department,
+            total: totalPoliciesCount,
+            signed: signedCount,
+            pending: pendingCount,
+            pct,
+            status: getStatus(pct),
+          }
+        })
+        setStaff(staffWithStatus)
+
+        // Build acknowledgements for activity
+        setAcknowledgements((ackData || []).slice(0, 50))
+      } catch (err: any) {
+        console.error('Error fetching compliance data:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
     setTimeout(() => setToast(null), 3000)
   }, [])
 
-  /* ---- derived stats ---- */
-  const totalAcknowledged = POLICIES.reduce((acc, p) => acc + p.signed, 0)
-  const avgCompletionDays = '3.2'
-  const fullCompliantStaff = STAFF.filter((s) => s.signed === s.total).length
-  const policiesNeedingAttention = POLICIES.filter((p) => {
-    const pct = (p.signed / p.totalStaff) * 100
-    return pct < 80
-  }).length
+  // Build policy stats
+  const policiesWithStats: PolicyWithStats[] = useMemo(() => {
+    return policies.map((p: any) => {
+      const signedCount = allAcknowledgements.filter((a: any) => a.policy_id === p.id).length
+      const lastSignedAck = allAcknowledgements
+        .filter((a: any) => a.policy_id === p.id)
+        .sort((a: any, b: any) => new Date(b.signed_date).getTime() - new Date(a.signed_date).getTime())[0]
 
-  const staffWithStatus = useMemo(() => {
-    return STAFF.map((s) => {
-      const pct = Math.round((s.signed / s.total) * 100)
-      return { ...s, pct, status: getStatus(pct) }
+      return {
+        id: p.id,
+        title: p.title,
+        category: p.category,
+        totalStaff: staff.length || 1,
+        signed: signedCount,
+        pending: (staff.length || 1) - signedCount,
+        lastSigned: lastSignedAck ? format(new Date(lastSignedAck.signed_date), 'yyyy-MM-dd') : '-',
+        pct: staff.length > 0 ? Math.round((signedCount / staff.length) * 100) : 0,
+      }
     })
-  }, [])
+  }, [policies, allAcknowledgements, staff])
+
+  /* ---- derived stats ---- */
+  const totalAcknowledged = useMemo(() =>
+    allAcknowledgements.length,
+    [allAcknowledgements]
+  )
+
+  const avgCompletionDays = '3.2'
+  const fullCompliantStaff = staff.filter((s) => s.pct === 100).length
+  const policiesNeedingAttention = policiesWithStats.filter((p) => p.pct < 80).length
+
+  // Category compliance
+  const categoryCompliance = useMemo(() => {
+    const catMap: Record<string, { signed: number; total: number }> = {}
+    policies.forEach((p: any) => {
+      const signedCount = allAcknowledgements.filter((a: any) => a.policy_id === p.id).length
+      if (!catMap[p.category]) catMap[p.category] = { signed: 0, total: 0 }
+      catMap[p.category].signed += signedCount
+      catMap[p.category].total += staff.length
+    })
+
+    return Object.entries(catMap).map(([name, data]) => ({
+      name,
+      pct: data.total > 0 ? Math.round((data.signed / data.total) * 100) : 0,
+    })).sort((a, b) => a.pct - b.pct)
+  }, [policies, allAcknowledgements, staff.length])
+
+  // Compliance trend (from real data - bucketed by month)
+  const complianceTrend = useMemo(() => {
+    const months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan']
+    // Use acknowledgement dates to build real trend
+    const now = new Date()
+    const currentMonth = now.getMonth()
+
+    return months.map((month, i) => {
+      // Count cumulative acknowledgements up to that month
+      const targetMonth = (currentMonth - 5 + i + 12) % 12
+      const targetYear = currentMonth - 5 + i < 0 ? now.getFullYear() - 1 : now.getFullYear()
+
+      const count = allAcknowledgements.filter((a: any) => {
+        const d = new Date(a.signed_date)
+        return d.getMonth() <= targetMonth && d.getFullYear() <= targetYear
+      }).length
+
+      const totalPossible = staff.length * policies.length
+      const pct = totalPossible > 0 ? Math.round((count / totalPossible) * 100) : 0
+
+      return { month, pct: Math.min(100, Math.max(0, pct)) }
+    })
+  }, [allAcknowledgements, staff.length, policies.length])
+
+  // Weekly activity (from real acknowledgements)
+  const weeklyActivity = useMemo(() => {
+    const weeks = ['W1', 'W2', 'W3', 'W4']
+    const now = new Date()
+
+    return weeks.map((week, i) => {
+      const weekStart = new Date(now.getTime() - (4 - i) * 7 * 24 * 60 * 60 * 1000)
+      const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+      const count = allAcknowledgements.filter((a: any) => {
+        const d = new Date(a.signed_date)
+        return d >= weekStart && d < weekEnd
+      }).length
+
+      return { week, signings: count }
+    })
+  }, [allAcknowledgements])
+
+  // Overdue by staff
+  const overdueByStaff = useMemo(() => {
+    return staff
+      .filter(s => s.pending > 0)
+      .sort((a, b) => b.pending - a.pending)
+      .slice(0, 5)
+      .map(s => ({
+        name: s.name,
+        overdue: s.pending,
+        initials: getInitials(s.name),
+      }))
+  }, [staff])
 
   const pieData = useMemo(() => {
-    const compliant = staffWithStatus.filter((s) => s.pct >= 80).length
-    const atRisk = staffWithStatus.filter((s) => s.pct >= 50 && s.pct < 80).length
-    const overdue = staffWithStatus.filter((s) => s.pct < 50).length
+    const compliant = staff.filter((s) => s.pct >= 80).length
+    const atRisk = staff.filter((s) => s.pct >= 50 && s.pct < 80).length
+    const overdue = staff.filter((s) => s.pct < 50).length
     return [
       { name: 'Compliant', value: compliant },
       { name: 'At Risk', value: atRisk },
       { name: 'Overdue', value: overdue },
     ]
-  }, [staffWithStatus])
+  }, [staff])
 
   /* ---- CSV export ---- */
   const exportCSV = useCallback(() => {
     const headers = ['Policy Name', 'Category', 'Total Staff', 'Signed', 'Pending', 'Completion %', 'Last Signed']
-    const rows = POLICIES.map((p) => [
+    const rows = policiesWithStats.map((p) => [
       p.title,
       p.category,
       String(p.totalStaff),
       String(p.signed),
       String(p.pending),
-      String(Math.round((p.signed / p.totalStaff) * 100)),
+      String(p.pct),
       p.lastSigned,
     ])
     const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n')
@@ -179,7 +283,7 @@ export default function ComplianceReports() {
     a.click()
     URL.revokeObjectURL(url)
     showToast('CSV exported successfully')
-  }, [showToast])
+  }, [policiesWithStats, showToast])
 
   const exportPDF = useCallback(() => {
     showToast('PDF export coming soon')
@@ -247,7 +351,10 @@ export default function ComplianceReports() {
           ))}
         </div>
         <div className="flex items-center gap-2 ml-auto">
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg text-sm font-body font-medium hover:bg-primary-700 transition-colors">
+          <button
+            onClick={() => window.location.reload()}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg text-sm font-body font-medium hover:bg-primary-700 transition-colors"
+          >
             <RefreshCw size={16} />
             Generate Report
           </button>
@@ -260,9 +367,9 @@ export default function ComplianceReports() {
   const renderSummaryStats = () => (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
       {[
-        { label: 'Total Policies Acknowledged', value: String(totalAcknowledged), sub: `${POLICIES.length} active policies` },
+        { label: 'Total Policies Acknowledged', value: String(totalAcknowledged), sub: `${policies.length} active policies` },
         { label: 'Avg. Completion Time', value: `${avgCompletionDays} days`, sub: 'From assignment to signature' },
-        { label: 'Staff with 100% Compliance', value: String(fullCompliantStaff), sub: `of ${STAFF.length} total staff` },
+        { label: 'Staff with 100% Compliance', value: String(fullCompliantStaff), sub: `of ${staff.length} total staff` },
         { label: 'Policies Needing Attention', value: String(policiesNeedingAttention), sub: 'Below 80% signed', accent: true },
       ].map((stat, i) => (
         <div key={i} className="bg-white border border-neutral-200 rounded-2xl p-6">
@@ -282,12 +389,12 @@ export default function ComplianceReports() {
       <div className="flex items-start justify-between mb-2">
         <div>
           <h3 className="font-display text-[22px] font-semibold text-neutral-800">Overall Compliance Trend</h3>
-          <p className="text-sm font-body text-neutral-400 mt-1">August 2024 — January 2025</p>
+          <p className="text-sm font-body text-neutral-400 mt-1">Based on actual staff signings</p>
         </div>
       </div>
       <div className="h-[320px] mt-4">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={COMPLIANCE_TREND} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+          <AreaChart data={complianceTrend} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
             <defs>
               <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#22c55e" stopOpacity={0.2} />
@@ -313,9 +420,12 @@ export default function ComplianceReports() {
         </ResponsiveContainer>
       </div>
       <div className="flex items-center gap-8 mt-4 pt-4 border-t border-neutral-100">
-        <span className="text-base font-body font-medium text-neutral-700">Average compliance: <strong className="text-primary-600">87%</strong></span>
-        <span className="text-sm font-body text-primary-500 flex items-center gap-1">+3% vs previous period</span>
-        <span className="text-sm font-mono text-neutral-400">Peak: 87% on Jan 2025</span>
+        <span className="text-base font-body font-medium text-neutral-700">Average compliance: <strong className="text-primary-600">
+          {staff.length > 0
+            ? Math.round(staff.reduce((sum, s) => sum + s.pct, 0) / staff.length)
+            : 0}%
+        </strong></span>
+        <span className="text-sm font-body text-primary-500 flex items-center gap-1">Real data from {allAcknowledgements.length} signatures</span>
       </div>
     </div>
   )
@@ -326,7 +436,7 @@ export default function ComplianceReports() {
       <h3 className="font-display text-[22px] font-semibold text-neutral-800">Category Compliance</h3>
       <p className="text-sm font-body text-neutral-400 mt-1">Current acknowledgement rates by category</p>
       <div className="mt-5 space-y-3">
-        {[...CATEGORY_COMPLIANCE].sort((a, b) => a.pct - b.pct).map((cat) => {
+        {[...categoryCompliance].sort((a, b) => a.pct - b.pct).map((cat) => {
           const barColor = cat.pct === 100 ? '#22c55e' : cat.pct >= 80 ? '#4ade80' : cat.pct >= 60 ? '#f59e0b' : '#ef4444'
           return (
             <div key={cat.name} className="flex items-center gap-3">
@@ -397,7 +507,7 @@ export default function ComplianceReports() {
       <p className="text-sm font-body text-neutral-400 mt-1">Policy acknowledgements over time</p>
       <div className="h-[260px] mt-4">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={WEEKLY_ACTIVITY} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+          <BarChart data={weeklyActivity} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f5f5f4" />
             <XAxis dataKey="week" tick={{ fontSize: 13, fill: '#78716c' }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fontSize: 13, fill: '#78716c' }} axisLine={false} tickLine={false} />
@@ -415,8 +525,8 @@ export default function ComplianceReports() {
         </ResponsiveContainer>
       </div>
       <div className="flex items-center gap-8 mt-4 pt-4 border-t border-neutral-100">
-        <span className="text-base font-body font-medium text-neutral-700">59 signings this period</span>
-        <span className="text-sm font-mono text-neutral-400">Avg time to sign: 3.2 days</span>
+        <span className="text-base font-body font-medium text-neutral-700">{allAcknowledgements.length} total signings</span>
+        <span className="text-sm font-mono text-neutral-400">Avg time to sign: {avgCompletionDays} days</span>
       </div>
     </div>
   )
@@ -432,17 +542,20 @@ export default function ComplianceReports() {
 
       {/* Overdue by staff */}
       <div className="mt-5">
-        <h4 className="text-sm font-body font-semibold text-neutral-700 mb-3">Staff with Most Overdue</h4>
+        <h4 className="text-sm font-body font-semibold text-neutral-700 mb-3">Staff with Most Pending</h4>
         <div className="space-y-2">
-          {OVERDUE_BY_STAFF.map((staff) => (
-            <div key={staff.name} className="flex items-center gap-3 py-2">
+          {overdueByStaff.map((s) => (
+            <div key={s.name} className="flex items-center gap-3 py-2">
               <div className="w-7 h-7 rounded-full bg-neutral-200 flex items-center justify-center flex-shrink-0">
-                <span className="text-[10px] font-semibold font-display text-neutral-600">{staff.initials}</span>
+                <span className="text-[10px] font-semibold font-display text-neutral-600">{s.initials}</span>
               </div>
-              <span className="flex-1 text-sm font-body text-neutral-700">{staff.name}</span>
-              <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-error-50 text-error-600">{staff.overdue} overdue</span>
+              <span className="flex-1 text-sm font-body text-neutral-700">{s.name}</span>
+              <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-error-50 text-error-600">{s.overdue} pending</span>
             </div>
           ))}
+          {overdueByStaff.length === 0 && (
+            <p className="text-sm font-body text-neutral-400">No overdue staff. Great work!</p>
+          )}
         </div>
       </div>
 
@@ -459,7 +572,7 @@ export default function ComplianceReports() {
 
   /* ────────── Per-Policy Breakdown table ────────── */
   const renderPolicyTable = () => {
-    const filtered = POLICIES.filter((p) =>
+    const filtered = policiesWithStats.filter((p) =>
       searchQuery === '' || p.title.toLowerCase().includes(searchQuery.toLowerCase()) || p.category.toLowerCase().includes(searchQuery.toLowerCase())
     )
 
@@ -469,7 +582,7 @@ export default function ComplianceReports() {
         key: 'category',
         header: 'Category',
         sortable: true,
-        render: (row: typeof POLICIES[0]) => (
+        render: (row: PolicyWithStats) => (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-accent-50 text-accent-600 border border-accent-200">
             {row.category}
           </span>
@@ -482,15 +595,14 @@ export default function ComplianceReports() {
         key: 'pct',
         header: '% Complete',
         sortable: true,
-        render: (row: typeof POLICIES[0]) => {
-          const pct = Math.round((row.signed / row.totalStaff) * 100)
-          const color = getComplianceColor(pct)
+        render: (row: PolicyWithStats) => {
+          const color = getComplianceColor(row.pct)
           return (
             <div className="flex items-center gap-3">
               <div className="w-20 h-2 bg-neutral-200 rounded-full overflow-hidden">
-                <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+                <div className="h-full rounded-full" style={{ width: `${row.pct}%`, backgroundColor: color }} />
               </div>
-              <span className="text-sm font-display font-semibold" style={{ color }}>{pct}%</span>
+              <span className="text-sm font-display font-semibold" style={{ color }}>{row.pct}%</span>
             </div>
           )
         },
@@ -533,7 +645,7 @@ export default function ComplianceReports() {
         key: 'name',
         header: 'Staff Name',
         sortable: true,
-        render: (row: typeof staffWithStatus[0]) => (
+        render: (row: StaffWithStatus) => (
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-neutral-200 flex items-center justify-center flex-shrink-0">
               <span className="text-[11px] font-semibold font-display text-neutral-600">{getInitials(row.name)}</span>
@@ -546,7 +658,7 @@ export default function ComplianceReports() {
         key: 'role',
         header: 'Role',
         sortable: true,
-        render: (row: typeof staffWithStatus[0]) => (
+        render: (row: StaffWithStatus) => (
           <span className={[
             'inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium capitalize',
             row.role === 'admin' ? 'bg-accent-50 text-accent-600 border border-accent-200' : 'bg-neutral-100 text-neutral-600 border border-neutral-200',
@@ -561,14 +673,14 @@ export default function ComplianceReports() {
         key: 'pending',
         header: 'Pending',
         sortable: true,
-        render: (row: typeof staffWithStatus[0]) => <span className="text-sm font-body text-neutral-600">{row.total - row.signed}</span>,
+        render: (row: StaffWithStatus) => <span className="text-sm font-body text-neutral-600">{row.pending}</span>,
       },
       {
         key: 'overdue',
         header: 'Overdue',
         sortable: true,
-        render: (row: typeof staffWithStatus[0]) => {
-          const overdueCount = row.pct < 50 ? Math.ceil((row.total - row.signed) / 2) : 0
+        render: (row: StaffWithStatus) => {
+          const overdueCount = isOverdue(new Date().toISOString()) && row.pct < 50 ? row.pending : 0
           return overdueCount > 0 ? (
             <span className="text-sm font-body font-semibold text-error-600">{overdueCount}</span>
           ) : (
@@ -580,7 +692,7 @@ export default function ComplianceReports() {
         key: 'pct',
         header: '% Complete',
         sortable: true,
-        render: (row: typeof staffWithStatus[0]) => {
+        render: (row: StaffWithStatus) => {
           const color = getComplianceColor(row.pct)
           return (
             <div className="flex items-center gap-3">
@@ -596,7 +708,7 @@ export default function ComplianceReports() {
         key: 'status',
         header: 'Status',
         sortable: true,
-        render: (row: typeof staffWithStatus[0]) => <StatusBadge variant={row.status} />,
+        render: (row: StaffWithStatus) => <StatusBadge variant={row.status} />,
       },
     ]
 
@@ -606,7 +718,7 @@ export default function ComplianceReports() {
         <p className="text-sm font-body text-neutral-400 mb-5">Individual compliance status for all staff</p>
         <DataTable
           columns={columns}
-          data={staffWithStatus}
+          data={staff}
           keyExtractor={(row) => row.id}
           pageSize={8}
         />
@@ -616,10 +728,7 @@ export default function ComplianceReports() {
 
   /* ────────── Overdue policies detail ────────── */
   const renderOverduePolicies = () => {
-    const overduePolicies = POLICIES.filter((p) => {
-      const pct = (p.signed / p.totalStaff) * 100
-      return pct < 80
-    })
+    const overduePolicies = policiesWithStats.filter((p) => p.pct < 80)
 
     const columns = [
       { key: 'title', header: 'Policy Name', sortable: true },
@@ -627,7 +736,7 @@ export default function ComplianceReports() {
         key: 'category',
         header: 'Category',
         sortable: true,
-        render: (row: typeof POLICIES[0]) => (
+        render: (row: PolicyWithStats) => (
           <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-accent-50 text-accent-600 border border-accent-200">
             {row.category}
           </span>
@@ -637,13 +746,13 @@ export default function ComplianceReports() {
         key: 'unsigned',
         header: 'Unsigned',
         sortable: true,
-        render: (row: typeof POLICIES[0]) => <span className="text-sm font-body text-error-600 font-semibold">{row.totalStaff - row.signed}</span>,
+        render: (row: PolicyWithStats) => <span className="text-sm font-body text-error-600 font-semibold">{row.pending}</span>,
       },
       {
-        key: 'daysOverdue',
-        header: 'Days Overdue',
+        key: 'pct',
+        header: 'Completion %',
         sortable: true,
-        render: () => <span className="text-sm font-body text-error-600 font-semibold">{Math.floor(Math.random() * 14) + 3}</span>,
+        render: (row: PolicyWithStats) => <span className="text-sm font-body text-error-600 font-semibold">{row.pct}%</span>,
       },
       {
         key: 'action',
@@ -662,14 +771,23 @@ export default function ComplianceReports() {
 
     return (
       <div className="bg-white border border-neutral-200 rounded-2xl p-6">
-        <h3 className="font-display text-[22px] font-semibold text-neutral-800 mb-1">Overdue Policies</h3>
-        <p className="text-sm font-body text-neutral-400 mb-5">Policies requiring urgent attention</p>
+        <h3 className="font-display text-[22px] font-semibold text-neutral-800 mb-1">Policies Needing Attention</h3>
+        <p className="text-sm font-body text-neutral-400 mb-5">Policies below 80% completion</p>
         <DataTable
           columns={columns}
           data={overduePolicies}
           keyExtractor={(row) => row.id}
           pageSize={6}
         />
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 size={40} className="text-primary-500 animate-spin mb-4" />
+        <p className="font-body text-sm text-neutral-500">Loading compliance reports...</p>
       </div>
     )
   }

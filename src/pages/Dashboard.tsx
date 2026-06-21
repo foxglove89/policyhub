@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
+import { supabase } from '@/lib/supabase'
 import ProgressRing from '@/components/ProgressRing'
 import StatusBadge from '@/components/StatusBadge'
 import {
@@ -11,18 +12,14 @@ import {
   FilePlus,
   Bell,
   RefreshCw,
+  Loader2,
 } from 'lucide-react'
-import { format } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
+import type { Policy, Acknowledgement } from '@/types'
+import { POLICY_CATEGORIES } from '@/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────
-interface MockPolicy {
-  id: string
-  title: string
-  category: string
-  version: string
-  last_updated: string
-  due_date: string
-  signed_date: string | null
+interface PolicyWithStatus extends Policy {
   status: 'signed' | 'pending' | 'overdue'
 }
 
@@ -33,69 +30,6 @@ interface ActivityItem {
   timestamp: string
 }
 
-// ─── Mock Data: 24 Policies ──────────────────────────────────────────────
-const MOCK_POLICIES: MockPolicy[] = [
-  // COVID-19 (2)
-  { id: 'p1', title: 'COVID-19 Infection Control Policy', category: 'COVID-19', version: '3.2', last_updated: '2025-01-10T09:00:00Z', due_date: '2025-01-20T00:00:00Z', signed_date: '2025-01-12T14:30:00Z', status: 'signed' },
-  { id: 'p2', title: 'Pandemic Response and Business Continuity', category: 'COVID-19', version: '2.1', last_updated: '2025-01-08T11:00:00Z', due_date: '2025-01-28T00:00:00Z', signed_date: null, status: 'pending' },
-  // Care Planning (3)
-  { id: 'p3', title: 'Individual Care Planning Guidelines', category: 'Care Planning', version: '4.0', last_updated: '2024-12-15T10:00:00Z', due_date: '2025-01-15T00:00:00Z', signed_date: '2025-01-10T09:15:00Z', status: 'signed' },
-  { id: 'p4', title: 'Placement Planning and Reviews', category: 'Care Planning', version: '3.5', last_updated: '2024-12-20T14:00:00Z', due_date: '2025-01-18T00:00:00Z', signed_date: '2025-01-14T16:45:00Z', status: 'signed' },
-  { id: 'p5', title: 'Transition and Leaving Care Protocol', category: 'Care Planning', version: '2.3', last_updated: '2025-01-05T08:30:00Z', due_date: '2025-01-25T00:00:00Z', signed_date: null, status: 'pending' },
-  // Views, Wishes and Feelings (2)
-  { id: 'p6', title: 'Listening to Children and Young People', category: 'Views, Wishes and Feelings', version: '2.8', last_updated: '2024-11-28T09:00:00Z', due_date: '2025-01-12T00:00:00Z', signed_date: '2025-01-08T11:20:00Z', status: 'signed' },
-  { id: 'p7', title: 'Advocacy and Independent Visitor Policy', category: 'Views, Wishes and Feelings', version: '1.9', last_updated: '2024-12-01T13:00:00Z', due_date: '2025-01-14T00:00:00Z', signed_date: null, status: 'overdue' },
-  // Child Protection (4)
-  { id: 'p8', title: 'Child Protection and Safeguarding Policy 2025', category: 'Child Protection', version: '5.1', last_updated: '2025-01-12T10:00:00Z', due_date: '2025-01-15T00:00:00Z', signed_date: '2025-01-13T08:45:00Z', status: 'signed' },
-  { id: 'p9', title: 'Allegations Against Staff Procedure', category: 'Child Protection', version: '3.4', last_updated: '2024-12-18T11:00:00Z', due_date: '2025-01-20T00:00:00Z', signed_date: '2025-01-16T14:00:00Z', status: 'signed' },
-  { id: 'p10', title: 'Missing from Care Protocol', category: 'Child Protection', version: '2.7', last_updated: '2024-12-10T15:00:00Z', due_date: '2025-01-22T00:00:00Z', signed_date: '2025-01-18T10:30:00Z', status: 'signed' },
-  { id: 'p11', title: 'Whistleblowing Policy', category: 'Child Protection', version: '2.2', last_updated: '2025-01-06T09:00:00Z', due_date: '2025-01-13T00:00:00Z', signed_date: null, status: 'overdue' },
-  // Health and Well-being (3)
-  { id: 'p12', title: 'Health and Safety Protocol Revision', category: 'Health and Well-being', version: '4.3', last_updated: '2025-01-10T12:00:00Z', due_date: '2025-01-28T00:00:00Z', signed_date: null, status: 'pending' },
-  { id: 'p13', title: 'Medication Administration Policy', category: 'Health and Well-being', version: '3.8', last_updated: '2024-12-22T10:00:00Z', due_date: '2025-01-16T00:00:00Z', signed_date: '2025-01-14T09:30:00Z', status: 'signed' },
-  { id: 'p14', title: 'Mental Health and Emotional Wellbeing', category: 'Health and Well-being', version: '2.5', last_updated: '2024-12-05T14:00:00Z', due_date: '2025-01-19T00:00:00Z', signed_date: '2025-01-17T11:00:00Z', status: 'signed' },
-  // Quality of Care (2)
-  { id: 'p15', title: 'Ofsted Inspection Preparation Guide', category: 'Quality of Care', version: '2.0', last_updated: '2025-01-03T09:00:00Z', due_date: '2025-01-21T00:00:00Z', signed_date: null, status: 'pending' },
-  { id: 'p16', title: 'Continuous Improvement Framework', category: 'Quality of Care', version: '1.7', last_updated: '2024-11-25T11:00:00Z', due_date: '2025-01-10T00:00:00Z', signed_date: '2025-01-09T15:45:00Z', status: 'signed' },
-  // Enjoyment and Achievement (2)
-  { id: 'p17', title: 'Education and Achievement Support', category: 'Enjoyment and Achievement', version: '2.4', last_updated: '2024-12-12T10:00:00Z', due_date: '2025-01-17T00:00:00Z', signed_date: '2025-01-15T10:00:00Z', status: 'signed' },
-  { id: 'p18', title: 'Leisure Activities and Enrichment Programme', category: 'Enjoyment and Achievement', version: '1.6', last_updated: '2024-12-08T13:00:00Z', due_date: '2025-01-12T00:00:00Z', signed_date: '2025-01-11T14:20:00Z', status: 'signed' },
-  // Positive Relationships (2)
-  { id: 'p19', title: 'Positive Behaviour Support Guidelines', category: 'Positive Relationships', version: '3.3', last_updated: '2025-01-07T09:00:00Z', due_date: '2025-01-26T00:00:00Z', signed_date: null, status: 'pending' },
-  { id: 'p20', title: 'Restorative Practice and Conflict Resolution', category: 'Positive Relationships', version: '2.1', last_updated: '2024-12-14T11:00:00Z', due_date: '2025-01-14T00:00:00Z', signed_date: '2025-01-13T16:30:00Z', status: 'signed' },
-  // Leadership and Management (2)
-  { id: 'p21', title: 'Fire Safety and Emergency Procedures', category: 'Leadership and Management', version: '4.2', last_updated: '2024-12-28T10:00:00Z', due_date: '2025-01-11T00:00:00Z', signed_date: '2025-01-10T09:00:00Z', status: 'signed' },
-  { id: 'p22', title: 'Staff Supervision and Appraisal Policy', category: 'Leadership and Management', version: '3.0', last_updated: '2025-01-09T14:00:00Z', due_date: '2025-01-23T00:00:00Z', signed_date: '2025-01-20T11:45:00Z', status: 'signed' },
-  // GDPR (2)
-  { id: 'p23', title: 'Data Handling and GDPR Compliance', category: 'GDPR', version: '3.6', last_updated: '2025-01-11T08:00:00Z', due_date: '2025-01-14T00:00:00Z', signed_date: null, status: 'overdue' },
-  { id: 'p24', title: 'CCTV and Digital Surveillance Policy', category: 'GDPR', version: '2.3', last_updated: '2024-12-16T09:00:00Z', due_date: '2025-01-18T00:00:00Z', signed_date: '2025-01-16T13:15:00Z', status: 'signed' },
-]
-
-// ─── Mock Activity Feed ──────────────────────────────────────────────────
-const ACTIVITY_FEED: ActivityItem[] = [
-  { id: 'a1', type: 'signed', message: 'You signed Safeguarding Policy v2.1', timestamp: '2025-01-20T14:00:00Z' },
-  { id: 'a2', type: 'new_policy', message: 'New policy uploaded: Fire Safety 2025', timestamp: '2025-01-20T09:00:00Z' },
-  { id: 'a3', type: 'reminder', message: 'Reminder: 3 policies need attention', timestamp: '2025-01-19T08:00:00Z' },
-  { id: 'a4', type: 'signed', message: 'You signed Data Retention Policy', timestamp: '2025-01-18T16:30:00Z' },
-  { id: 'a5', type: 'update', message: 'Admin updated Behaviour Management Guide', timestamp: '2025-01-17T11:00:00Z' },
-  { id: 'a6', type: 'signed', message: 'You signed Health and Safety Protocol', timestamp: '2025-01-16T10:15:00Z' },
-  { id: 'a7', type: 'new_policy', message: 'New policy: Transition and Leaving Care Protocol', timestamp: '2025-01-15T13:00:00Z' },
-  { id: 'a8', type: 'signed', message: 'You signed Fire Safety and Emergency Procedures', timestamp: '2025-01-14T09:00:00Z' },
-]
-
-const CATEGORY_ORDER = [
-  'COVID-19',
-  'Care Planning',
-  'Views, Wishes and Feelings',
-  'Child Protection',
-  'Health and Well-being',
-  'Quality of Care',
-  'Enjoyment and Achievement',
-  'Positive Relationships',
-  'Leadership and Management',
-  'GDPR',
-]
-
 // ─── Helpers ─────────────────────────────────────────────────────────────
 function getGreeting(): string {
   const hour = new Date().getHours()
@@ -105,16 +39,11 @@ function getGreeting(): string {
 }
 
 function relativeTime(dateStr: string): string {
-  const now = new Date('2025-01-21T10:00:00Z')
-  const then = new Date(dateStr)
-  const diffMs = now.getTime() - then.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMins / 60)
-  const diffDays = Math.floor(diffHours / 24)
-  if (diffMins < 60) return `${diffMins} mins ago`
-  if (diffHours < 24) return `${diffHours} hr${diffHours > 1 ? 's' : ''} ago`
-  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
-  return format(then, 'd MMM yyyy')
+  try {
+    return formatDistanceToNow(new Date(dateStr), { addSuffix: false }) + ' ago'
+  } catch {
+    return dateStr
+  }
 }
 
 function activityIcon(type: ActivityItem['type']) {
@@ -133,6 +62,12 @@ function activityIconBg(type: ActivityItem['type']): string {
     case 'reminder': return 'bg-warning-500'
     case 'update': return 'bg-accent-500'
   }
+}
+
+function isOverdue(lastUpdated: string): boolean {
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  return new Date(lastUpdated) < thirtyDaysAgo
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────
@@ -229,18 +164,20 @@ function ProgressCard({ percentage, signed, total, overdue }: { percentage: numb
   )
 }
 
-function PendingPoliciesCard({ policies }: { policies: MockPolicy[] }) {
+function PendingPoliciesCard({ policies, userAckIds }: { policies: PolicyWithStatus[]; userAckIds: Set<string> }) {
   const navigate = useNavigate()
   const sorted = useMemo(() => {
     return [...policies]
-      .filter(p => p.status !== 'signed')
+      .filter(p => !userAckIds.has(p.id))
       .sort((a, b) => {
-        if (a.status === 'overdue' && b.status !== 'overdue') return -1
-        if (a.status !== 'overdue' && b.status === 'overdue') return 1
-        return new Date(a.due_date).getTime() - new Date(b.due_date).getTime()
+        const aOverdue = isOverdue(a.last_updated)
+        const bOverdue = isOverdue(b.last_updated)
+        if (aOverdue && !bOverdue) return -1
+        if (!aOverdue && bOverdue) return 1
+        return new Date(a.last_updated).getTime() - new Date(b.last_updated).getTime()
       })
       .slice(0, 5)
-  }, [policies])
+  }, [policies, userAckIds])
 
   return (
     <div className="bg-white border border-neutral-200 rounded-2xl shadow-sm overflow-hidden"
@@ -265,7 +202,7 @@ function PendingPoliciesCard({ policies }: { policies: MockPolicy[] }) {
       ) : (
         <div className="divide-y divide-neutral-100">
           {sorted.map((policy) => {
-            const isOverdue = policy.status === 'overdue'
+            const policyOverdue = isOverdue(policy.last_updated)
             return (
               <div
                 key={policy.id}
@@ -273,14 +210,14 @@ function PendingPoliciesCard({ policies }: { policies: MockPolicy[] }) {
                 className={[
                   'flex items-center gap-4 px-6 py-4 cursor-pointer transition-colors duration-150',
                   'hover:bg-neutral-50',
-                  isOverdue ? 'border-l-[3px] border-l-error-500 bg-error-50/40' : 'border-l-[3px] border-l-warning-500',
+                  policyOverdue ? 'border-l-[3px] border-l-error-500 bg-error-50/40' : 'border-l-[3px] border-l-warning-500',
                 ].join(' ')}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/policies/${policy.id}`) }}
               >
                 <div className="shrink-0">
-                  {isOverdue ? (
+                  {policyOverdue ? (
                     <AlertTriangle size={20} className="text-error-500" />
                   ) : (
                     <Clock size={20} className="text-warning-500" />
@@ -294,7 +231,7 @@ function PendingPoliciesCard({ policies }: { policies: MockPolicy[] }) {
                     {policy.category}
                   </p>
                 </div>
-                <StatusBadge variant={policy.status} />
+                <StatusBadge variant={policyOverdue ? 'overdue' : 'pending'} />
                 <ChevronRight size={16} className="text-neutral-300 shrink-0" />
               </div>
             )
@@ -316,17 +253,17 @@ function PendingPoliciesCard({ policies }: { policies: MockPolicy[] }) {
   )
 }
 
-function CategoryBreakdown({ policies }: { policies: MockPolicy[] }) {
+function CategoryBreakdown({ policies, userAckIds }: { policies: PolicyWithStatus[]; userAckIds: Set<string> }) {
   const categoryStats = useMemo(() => {
-    return CATEGORY_ORDER.map((cat) => {
+    return POLICY_CATEGORIES.map((cat) => {
       const catPolicies = policies.filter(p => p.category === cat)
       const total = catPolicies.length
-      const signed = catPolicies.filter(p => p.status === 'signed').length
-      const hasOverdue = catPolicies.some(p => p.status === 'overdue')
+      const signed = catPolicies.filter(p => userAckIds.has(p.id)).length
+      const hasOverdue = catPolicies.some(p => isOverdue(p.last_updated) && !userAckIds.has(p.id))
       const pct = total > 0 ? Math.round((signed / total) * 100) : 0
       return { category: cat, total, signed, pct, hasOverdue }
     })
-  }, [policies])
+  }, [policies, userAckIds])
 
   return (
     <div>
@@ -399,8 +336,12 @@ function RecentActivity({ activities }: { activities: ActivityItem[] }) {
 
 // ─── Main Dashboard Component ────────────────────────────────────────────
 export default function Dashboard() {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const [mounted, setMounted] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [policies, setPolicies] = useState<Policy[]>([])
+  const [acknowledgements, setAcknowledgements] = useState<Acknowledgement[]>([])
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -408,16 +349,63 @@ export default function Dashboard() {
     return () => clearTimeout(timer)
   }, [])
 
-  const name = profile?.name?.split(' ')[0] ?? 'Sarah'
+  // Fetch data from Supabase
+  useEffect(() => {
+    async function fetchData() {
+      if (!user?.id) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Fetch all active policies
+        const { data: policiesData, error: policiesError } = await supabase
+          .from('policies')
+          .select('*')
+          .eq('active', true)
+
+        if (policiesError) throw policiesError
+
+        // Fetch user's acknowledgements with policy details
+        const { data: ackData, error: ackError } = await supabase
+          .from('acknowledgements')
+          .select('*, policy:policies(*)')
+          .eq('staff_id', user.id)
+          .order('signed_date', { ascending: false })
+
+        if (ackError) throw ackError
+
+        setPolicies(policiesData || [])
+        setAcknowledgements(ackData || [])
+      } catch (err: any) {
+        console.error('Error fetching dashboard data:', err)
+        setError(err.message || 'Failed to load dashboard data')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [user?.id])
+
+  const name = profile?.name?.split(' ')[0] ?? 'Staff Member'
+
+  // Build a set of policy IDs the user has signed
+  const userAckIds = useMemo(() => {
+    return new Set(acknowledgements.map(a => a.policy_id))
+  }, [acknowledgements])
 
   const stats = useMemo(() => {
-    const total = MOCK_POLICIES.length
-    const signed = MOCK_POLICIES.filter(p => p.status === 'signed').length
-    const pending = MOCK_POLICIES.filter(p => p.status === 'pending').length
-    const overdue = MOCK_POLICIES.filter(p => p.status === 'overdue').length
+    const total = policies.length
+    const signed = acknowledgements.length
+    const pending = total - signed
+    const overdue = policies.filter(p => !userAckIds.has(p.id) && isOverdue(p.last_updated)).length
     const percentage = total > 0 ? (signed / total) * 100 : 0
     return { total, signed, pending, overdue, percentage }
-  }, [])
+  }, [policies, acknowledgements, userAckIds])
 
   const statCards = [
     { label: 'Total Policies', value: stats.total, color: 'text-neutral-700', bg: 'bg-neutral-50', border: 'border-neutral-200' },
@@ -425,6 +413,53 @@ export default function Dashboard() {
     { label: 'Pending', value: stats.pending, color: 'text-warning-600', bg: 'bg-warning-50', border: 'border-warning-200' },
     { label: 'Overdue', value: stats.overdue, color: 'text-error-600', bg: 'bg-error-50', border: 'border-error-200' },
   ]
+
+  // Build activity feed from real acknowledgements
+  const activityFeed: ActivityItem[] = useMemo(() => {
+    const activities: ActivityItem[] = acknowledgements.slice(0, 8).map((ack, i) => ({
+      id: ack.id || `ack-${i}`,
+      type: 'signed' as const,
+      message: `You signed ${ack.policy?.title ?? 'a policy'}`,
+      timestamp: ack.signed_date,
+    }))
+
+    // If no real activities, show a welcome message
+    if (activities.length === 0) {
+      activities.push({
+        id: 'welcome',
+        type: 'reminder',
+        message: 'Welcome! Start reviewing and signing your policies.',
+        timestamp: new Date().toISOString(),
+      })
+    }
+
+    return activities
+  }, [acknowledgements])
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 size={40} className="text-primary-500 animate-spin mb-4" />
+        <p className="font-body text-sm text-neutral-500">Loading dashboard data...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <AlertTriangle size={40} className="text-error-500 mb-4" />
+        <p className="font-body text-base text-neutral-700 font-medium">Failed to load dashboard</p>
+        <p className="font-body text-sm text-neutral-500 mt-1">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-body font-medium hover:bg-primary-700 transition-colors"
+        >
+          Retry
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -492,7 +527,7 @@ export default function Dashboard() {
           ].join(' ')}
           style={{ transitionDelay: '250ms' }}
         >
-          <PendingPoliciesCard policies={MOCK_POLICIES} />
+          <PendingPoliciesCard policies={policies as PolicyWithStatus[]} userAckIds={userAckIds} />
         </div>
       </div>
 
@@ -504,7 +539,7 @@ export default function Dashboard() {
         ].join(' ')}
         style={{ transitionDelay: '350ms' }}
       >
-        <CategoryBreakdown policies={MOCK_POLICIES} />
+        <CategoryBreakdown policies={policies as PolicyWithStatus[]} userAckIds={userAckIds} />
       </div>
 
       {/* Recent Activity */}
@@ -515,7 +550,7 @@ export default function Dashboard() {
         ].join(' ')}
         style={{ transitionDelay: '400ms' }}
       >
-        <RecentActivity activities={ACTIVITY_FEED} />
+        <RecentActivity activities={activityFeed} />
       </div>
     </div>
   )

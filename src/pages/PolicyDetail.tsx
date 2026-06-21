@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { format } from 'date-fns'
 import {
@@ -10,12 +10,15 @@ import {
   ShieldCheck,
   FileText,
   AlertCircle,
+  Loader2,
+  AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { supabase } from '@/lib/supabase'
 import { ToastProvider, useToastHelpers } from '@/components/Toast'
 import PDFViewer from '@/components/PDFViewer'
 import StatusBadge from '@/components/StatusBadge'
-import type { StatusVariant } from '@/types'
+import type { StatusVariant, Policy, Acknowledgement } from '@/types'
 
 // --- Types ---
 
@@ -34,71 +37,13 @@ interface RelatedPolicy {
   last_updated: string
 }
 
-// --- Mock Data ---
-
-const mockPolicy = {
-  id: '1',
-  title: 'Safeguarding and Child Protection Policy',
-  category: 'Child Protection',
-  version: '4.0',
-  description:
-    'This policy outlines the procedures for safeguarding children and young people in our care, including reporting concerns, risk assessments, and staff responsibilities. It covers all aspects of child protection including recognition of abuse categories, responding to disclosures, and information sharing protocols with external agencies.',
-  pdf_url: '/sample-policy.pdf',
-  upload_date: '2024-03-15',
-  last_updated: '2024-09-01',
-  requires_acknowledgement: true,
-  active: true,
-  created_at: '2024-03-15T10:00:00Z',
-}
-
+// --- Mock version history (not in DB yet) ---
 const versionHistory: VersionEntry[] = [
   {
-    version: '4.0',
+    version: 'Current',
     date: '2024-09-01',
     author: 'Andy Brierley',
     changes: 'Updated to reflect new statutory guidance and added risk assessment procedures',
-  },
-  {
-    version: '3.0',
-    date: '2024-06-15',
-    author: 'Uzair Saeed',
-    changes: 'Revised staff training requirements and added DSL responsibilities section',
-  },
-  {
-    version: '2.0',
-    date: '2024-01-10',
-    author: 'Andy Brierley',
-    changes: 'Major rewrite following Ofsted inspection recommendations',
-  },
-  {
-    version: '1.0',
-    date: '2023-10-01',
-    author: 'Uzair Saeed',
-    changes: 'Initial policy creation',
-  },
-]
-
-const relatedPolicies: RelatedPolicy[] = [
-  {
-    id: '3',
-    title: 'Missing from Care and Absconding Policy',
-    category: 'Child Protection',
-    status: 'pending',
-    last_updated: '2024-08-20',
-  },
-  {
-    id: '7',
-    title: 'Behaviour Management and Physical Intervention',
-    category: 'Child Protection',
-    status: 'signed',
-    last_updated: '2024-07-15',
-  },
-  {
-    id: '12',
-    title: 'Allegations Against Staff Procedure',
-    category: 'Child Protection',
-    status: 'overdue',
-    last_updated: '2024-06-01',
   },
 ]
 
@@ -363,7 +308,6 @@ function SignedConfirmation({
         alt="Verified"
         className="w-16 h-16 mx-auto mb-4"
         onError={(e) => {
-          // Fallback if SVG doesn't exist
           const target = e.currentTarget
           target.style.display = 'none'
           const fallback = target.nextElementSibling as HTMLElement
@@ -561,10 +505,10 @@ function SignatureForm({
 
 function PolicyDetailContent() {
   const { id } = useParams<{ id: string }>()
-  const { profile } = useAuth()
-  const { success } = useToastHelpers()
+  const { profile, user } = useAuth()
+  const { success, error: showError } = useToastHelpers()
 
-  // Simulate policy status — in production this comes from an API
+  const [policy, setPolicy] = useState<Policy | null>(null)
   const [isSigned, setIsSigned] = useState(false)
   const [isSigning, setIsSigning] = useState(false)
   const [signedData, setSignedData] = useState<{
@@ -572,43 +516,170 @@ function PolicyDetailContent() {
     date: string
     signatureId: string
   } | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [relatedPolicies, setRelatedPolicies] = useState<RelatedPolicy[]>([])
+
+  // Fetch policy data
+  useEffect(() => {
+    async function fetchPolicy() {
+      if (!id || !user?.id) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Fetch the policy
+        const { data: policyData, error: policyError } = await supabase
+          .from('policies')
+          .select('*')
+          .eq('id', id)
+          .single()
+
+        if (policyError) throw policyError
+
+        setPolicy(policyData)
+
+        // Check if user has already signed this policy
+        const { data: ackData, error: ackError } = await supabase
+          .from('acknowledgements')
+          .select('*')
+          .eq('staff_id', user.id)
+          .eq('policy_id', id)
+          .maybeSingle()
+
+        if (ackError) throw ackError
+
+        if (ackData) {
+          setIsSigned(true)
+          setSignedData({
+            name: profile?.name ?? 'Staff Member',
+            date: ackData.signed_date,
+            signatureId: ackData.id,
+          })
+        }
+
+        // Fetch related policies (same category, excluding current)
+        const { data: relatedData } = await supabase
+          .from('policies')
+          .select('*')
+          .eq('category', policyData.category)
+          .neq('id', id)
+          .eq('active', true)
+          .limit(3)
+
+        if (relatedData) {
+          // Check status for each related policy
+          const { data: relatedAcks } = await supabase
+            .from('acknowledgements')
+            .select('policy_id')
+            .eq('staff_id', user.id)
+
+          const relatedAckIds = new Set((relatedAcks || []).map(a => a.policy_id))
+
+          const relatedWithStatus: RelatedPolicy[] = relatedData.map(rp => {
+            const signed = relatedAckIds.has(rp.id)
+            return {
+              id: rp.id,
+              title: rp.title,
+              category: rp.category,
+              status: signed ? 'signed' as const : isOverdue(rp.last_updated) ? 'overdue' as const : 'pending' as const,
+              last_updated: rp.last_updated,
+            }
+          })
+          setRelatedPolicies(relatedWithStatus)
+        }
+      } catch (err: any) {
+        console.error('Error fetching policy:', err)
+        setError(err.message || 'Failed to load policy')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchPolicy()
+  }, [id, user?.id])
 
   const policyStatus: StatusVariant = useMemo(() => {
     if (isSigned) return 'signed'
-    // Simulate different statuses based on policy ID
-    if (id === '1') return 'overdue'
-    if (id === '3') return 'pending'
-    return 'pending'
-  }, [isSigned, id])
+    if (!policy) return 'pending'
+    return isOverdue(policy.last_updated) ? 'overdue' : 'pending'
+  }, [isSigned, policy])
 
-  const formattedLastUpdated = useMemo(
-    () => format(new Date(mockPolicy.last_updated), 'd MMMM yyyy'),
-    []
-  )
+  const formattedLastUpdated = useMemo(() => {
+    if (!policy) return ''
+    return format(new Date(policy.last_updated), 'd MMMM yyyy')
+  }, [policy])
 
   const userName = profile?.name ?? ''
 
   const handleSign = useCallback(
-    (name: string) => {
+    async (name: string) => {
+      if (!user?.id || !policy?.id) return
+
       setIsSigning(true)
 
-      // Simulate API call
-      setTimeout(() => {
+      try {
+        const { data, error: insertError } = await supabase
+          .from('acknowledgements')
+          .insert({
+            staff_id: user.id,
+            policy_id: policy.id,
+          })
+          .select()
+          .single()
+
+        if (insertError) throw insertError
+
         const now = new Date().toISOString()
-        const sigId = `fox-${Math.random().toString(36).slice(2, 8)}${Math.random().toString(36).slice(2, 6)}`
+        const sigId = data?.id ?? `fox-${Math.random().toString(36).slice(2, 8)}`
 
         setSignedData({ name, date: now, signatureId: sigId })
         setIsSigned(true)
-        setIsSigning(false)
 
         success(
           'Policy Signed Successfully',
-          `You have acknowledged the ${mockPolicy.title}.`
+          `You have acknowledged the ${policy.title}.`
         )
-      }, 1500)
+      } catch (err: any) {
+        console.error('Error signing policy:', err)
+        showError('Failed to sign policy', err.message || 'Please try again.')
+      } finally {
+        setIsSigning(false)
+      }
     },
-    [success]
+    [user?.id, policy?.id, success, showError]
   )
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 size={40} className="text-primary-500 animate-spin mb-4" />
+        <p className="font-body text-sm text-neutral-500">Loading policy...</p>
+      </div>
+    )
+  }
+
+  if (error || !policy) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <AlertTriangle size={40} className="text-error-500 mb-4" />
+        <p className="font-body text-base text-neutral-700 font-medium">
+          {error || 'Policy not found'}
+        </p>
+        <Link
+          to="/policies"
+          className="mt-4 inline-flex items-center gap-1 text-sm font-body text-accent-600 hover:underline"
+        >
+          <ArrowLeft size={16} />
+          Back to Policies
+        </Link>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-[1440px] mx-auto">
@@ -634,19 +705,19 @@ function PolicyDetailContent() {
               className="font-display text-[26px] font-bold text-neutral-800 leading-tight mb-3"
               style={{ animationDelay: '100ms' }}
             >
-              {mockPolicy.title}
+              {policy.title}
             </h1>
 
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
               {/* Category badge */}
               <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium font-body bg-accent-50 text-accent-600 border border-accent-200">
-                {mockPolicy.category}
+                {policy.category}
               </span>
 
               {/* Version */}
               <span className="inline-flex items-center gap-1.5 font-mono text-[13px] text-neutral-500">
                 <Clock size={14} strokeWidth={1.5} className="text-neutral-400" />
-                Version {mockPolicy.version}
+                Version {policy.version}
               </span>
 
               {/* Last Updated */}
@@ -671,10 +742,10 @@ function PolicyDetailContent() {
           style={{ animationDelay: '300ms' }}
         >
           <PDFViewer
-            policyTitle={mockPolicy.title}
-            category={mockPolicy.category}
-            version={mockPolicy.version}
-            lastUpdated={mockPolicy.last_updated}
+            policyTitle={policy.title}
+            category={policy.category}
+            version={policy.version}
+            lastUpdated={policy.last_updated}
           />
         </div>
 
@@ -696,7 +767,7 @@ function PolicyDetailContent() {
               </div>
             </div>
             <p className="text-sm font-body text-neutral-600 leading-relaxed">
-              {mockPolicy.description}
+              {policy.description}
             </p>
           </div>
 
@@ -714,7 +785,7 @@ function PolicyDetailContent() {
             ) : (
               <SignatureForm
                 userName={userName}
-                policyTitle={mockPolicy.title}
+                policyTitle={policy.title}
                 onSign={handleSign}
                 isSigning={isSigning}
               />
@@ -736,7 +807,7 @@ function PolicyDetailContent() {
           >
             <RelatedPoliciesSection
               policies={relatedPolicies}
-              currentPolicyId={id ?? mockPolicy.id}
+              currentPolicyId={id ?? policy.id}
             />
           </div>
         </div>
