@@ -752,6 +752,7 @@ function PolicyDetailContent() {
             category={policy.category}
             version={policy.version}
             lastUpdated={policy.last_updated}
+            pdfUrl={policy.pdf_url}
           />
         </div>
 
