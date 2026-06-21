@@ -14,7 +14,7 @@ import {
   RefreshCw,
   Loader2,
 } from 'lucide-react'
-import { format, formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow } from 'date-fns'
 import type { Policy, Acknowledgement } from '@/types'
 import { POLICY_CATEGORIES } from '@/types'
 

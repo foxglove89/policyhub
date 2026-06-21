@@ -2,6 +2,8 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import type { Policy } from '@/types'
 import { POLICY_CATEGORIES } from '@/types'
 import { supabase } from '@/lib/supabase'
+
+let toastIdCounter = 0
 import DataTable from '@/components/DataTable'
 import {
   Search,
@@ -17,8 +19,7 @@ import {
   Check,
   FolderOpen,
   Loader2,
-  AlertTriangle,
-} from 'lucide-react'
+  } from 'lucide-react'
 import { format } from 'date-fns'
 
 /* ------------------------------------------------------------------ */
@@ -40,12 +41,6 @@ interface Toast {
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-
-let toastIdCounter = 0
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-}
 
 const CATEGORY_COLORS: Record<string, string> = {
   'COVID-19': 'bg-rose-50 text-rose-600 border-rose-200',

@@ -4,7 +4,7 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { format, subMonths } from 'date-fns'
+import { format } from 'date-fns'
 import {
   Target, FileText, Users, AlertTriangle, UploadCloud,
   ChevronRight, Bell, AlertCircle, Clock, FilePlus, UserX,
@@ -114,7 +114,7 @@ export default function AdminDashboard() {
   const [policies, setPolicies] = useState<any[]>([])
   const [staff, setStaff] = useState<StaffWithCompliance[]>([])
   const [activities, setActivities] = useState<ActivityItem[]>([])
-  const [acknowledgements, setAcknowledgements] = useState<any[]>([])
+  const [, setAcknowledgements] = useState<any[]>([])
 
   // Fetch all data
   useEffect(() => {
@@ -505,7 +505,7 @@ export default function AdminDashboard() {
       <h3 className="font-display text-[22px] font-semibold text-neutral-800">Recent Staff Activity</h3>
       <p className="text-sm font-body text-neutral-400 mt-1">Latest actions across the organisation</p>
       <div className="mt-5 space-y-1 max-h-[360px] overflow-y-auto pr-1">
-        {activities.map((item, i) => (
+        {activities.map((item, _i) => (
           <div key={item.id} className="flex items-start gap-3 py-3 border-b border-neutral-100 last:border-0">
             <div className={['w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0', item.color.split(' ')[1]].join(' ')}>
               {renderActivityIcon(item)}

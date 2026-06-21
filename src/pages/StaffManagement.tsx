@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import type { Staff } from '@/types'
 import { supabase } from '@/lib/supabase'
+
+let toastIdCounter = 0
 import DataTable from '@/components/DataTable'
 import {
   Search,
@@ -43,12 +45,6 @@ interface Toast {
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
-
-let toastIdCounter = 0
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`
-}
 
 function getInitials(name: string): string {
   return name
@@ -761,7 +757,7 @@ export default function StaffManagement() {
       try {
         // Create auth user first
         const tempPassword = data.email + '123!' // Simple temp password
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        const { error: authError } = await supabase.auth.signUp({
           email: data.email,
           password: tempPassword,
         })

@@ -6,8 +6,7 @@ import {
 import { format } from 'date-fns'
 import {
   Download, FileText, Printer, ChevronDown, RefreshCw,
-  Search, Bell, Loader2, AlertTriangle,
-} from 'lucide-react'
+  Search, Bell, Loader2, } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import StatusBadge from '@/components/StatusBadge'
 import DataTable from '@/components/DataTable'
@@ -76,7 +75,7 @@ export default function ComplianceReports() {
 
   const [policies, setPolicies] = useState<any[]>([])
   const [staff, setStaff] = useState<StaffWithStatus[]>([])
-  const [acknowledgements, setAcknowledgements] = useState<any[]>([])
+  const [, setAcknowledgements] = useState<any[]>([])
   const [allAcknowledgements, setAllAcknowledgements] = useState<any[]>([])
 
   // Fetch all data
@@ -111,7 +110,6 @@ export default function ComplianceReports() {
         setAllAcknowledgements(ackData || [])
 
         const totalPoliciesCount = (policiesData || []).length
-        const totalStaffCount = (staffData || []).length
 
         // Build staff with status
         const staffWithStatus: StaffWithStatus[] = (staffData || []).map((s: any) => {

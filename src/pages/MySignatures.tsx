@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { supabase } from '@/lib/supabase'
@@ -15,7 +15,6 @@ import {
   AlertTriangle,
 } from 'lucide-react'
 import { format, subMonths, isAfter } from 'date-fns'
-import type { Acknowledgement, Policy } from '@/types'
 import { POLICY_CATEGORIES } from '@/types'
 
 // ─── Types ───────────────────────────────────────────────────────────────

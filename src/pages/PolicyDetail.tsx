@@ -18,7 +18,7 @@ import { supabase } from '@/lib/supabase'
 import { ToastProvider, useToastHelpers } from '@/components/Toast'
 import PDFViewer from '@/components/PDFViewer'
 import StatusBadge from '@/components/StatusBadge'
-import type { StatusVariant, Policy, Acknowledgement } from '@/types'
+import type { StatusVariant, Policy } from '@/types'
 
 // --- Types ---
 
@@ -27,6 +27,12 @@ interface VersionEntry {
   date: string
   author: string
   changes: string
+}
+
+function isOverdue(lastUpdated: string): boolean {
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  return new Date(lastUpdated) < thirtyDaysAgo
 }
 
 interface RelatedPolicy {
