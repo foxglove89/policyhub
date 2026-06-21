@@ -337,22 +337,42 @@ function UploadPolicyModal({
 
   const handleBack = () => setStep((s) => Math.max(0, s - 1))
 
-  const handlePublish = async () => {
+   const handlePublish = async () => {
     setSubmitting(true)
     try {
+      let pdfUrl = ''
+      if (file) {
+        // Upload PDF to Supabase Storage
+        const fileName = `${Date.now()}-${file.name.replace(/\s+/g, '-')}`
+        const { error: uploadError } = await supabase
+          .storage
+          .from('policies')
+          .upload(fileName, file, {
+            contentType: 'application/pdf',
+            upsert: false,
+          })
+        if (uploadError) {
+          throw new Error(`PDF upload failed: ${uploadError.message}`)
+        }
+        pdfUrl = fileName
+      }
+      
       await onUpload({
         title: title.trim(),
         category,
         version: version.trim(),
         description: description.trim(),
-        // TODO: Upload PDF file to Supabase Storage and store the URL here
-        pdf_url: file ? `/policies/${file.name}` : '',
+        pdf_url: pdfUrl,
         requires_acknowledgement: requiresAck,
         active: true,
         signed_count: 0,
         total_staff: 16,
         status: 'active',
       })
+    } catch (err: any) {
+      console.error('Error publishing policy:', err)
+      addToast(`Failed to publish: ${err.message}`, 'error')
+      return
     } finally {
       setSubmitting(false)
     }
