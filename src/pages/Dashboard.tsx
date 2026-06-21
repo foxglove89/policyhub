@@ -370,10 +370,11 @@ export default function Dashboard() {
         if (policiesError) throw policiesError
 
         // Fetch user's acknowledgements with policy details
+        const staffId = profile?.id ?? user.id
         const { data: ackData, error: ackError } = await supabase
           .from('acknowledgements')
           .select('*, policy:policies(*)')
-          .eq('staff_id', user.id)
+          .eq('staff_id', staffId)
           .order('signed_date', { ascending: false })
 
         if (ackError) throw ackError
@@ -389,7 +390,7 @@ export default function Dashboard() {
     }
 
     fetchData()
-  }, [user?.id])
+  }, [user?.id, profile?.id])
 
   const name = profile?.name?.split(' ')[0] ?? 'Staff Member'
 

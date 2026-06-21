@@ -283,7 +283,7 @@ function Pagination({
 
 // ─── Main PolicyList Component ───────────────────────────────────────────
 export default function PolicyList() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('All')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -321,10 +321,11 @@ export default function PolicyList() {
         if (policiesError) throw policiesError
 
         // Fetch user's acknowledgements
+        const staffId = profile?.id ?? user.id
         const { data: ackData, error: ackError } = await supabase
           .from('acknowledgements')
           .select('*')
-          .eq('staff_id', user.id)
+          .eq('staff_id', staffId)
 
         if (ackError) throw ackError
 
@@ -339,7 +340,7 @@ export default function PolicyList() {
     }
 
     fetchData()
-  }, [user?.id])
+  }, [user?.id, profile?.id])
 
   // Reset to page 1 when filters change
   useEffect(() => {
