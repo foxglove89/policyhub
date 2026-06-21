@@ -671,6 +671,8 @@ function EditPolicyModal({
   const [active, setActive] = useState(true)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
+  const [pdfFile, setPdfFile] = useState<File | null>(null)
+  const [currentPdfUrl, setCurrentPdfUrl] = useState('')
 
   useEffect(() => {
     if (policy) {
@@ -680,6 +682,8 @@ function EditPolicyModal({
       setDescription(policy.description)
       setRequiresAck(policy.requires_acknowledgement)
       setActive(policy.status === 'active')
+      setCurrentPdfUrl(policy.pdf_url || '')
+      setPdfFile(null)
       setErrors({})
     }
   }, [policy])
@@ -698,6 +702,22 @@ function EditPolicyModal({
     if (!validate()) return
     setSubmitting(true)
     try {
+      let pdfUrl = currentPdfUrl
+
+      // Upload new PDF if selected
+      if (pdfFile) {
+        const fileName = `${Date.now()}-${pdfFile.name.replace(/\s+/g, '-')}`
+        const { error: uploadError } = await supabase
+          .storage
+          .from('policies')
+          .upload(fileName, pdfFile, {
+            contentType: 'application/pdf',
+            upsert: false,
+          })
+        if (uploadError) throw new Error(`PDF upload failed: ${uploadError.message}`)
+        pdfUrl = fileName
+      }
+
       await onSave(policy.id, {
         title: title.trim(),
         category,
@@ -706,7 +726,12 @@ function EditPolicyModal({
         requires_acknowledgement: requiresAck,
         status: active ? 'active' : 'inactive',
         active,
+        pdf_url: pdfUrl,
       })
+    } catch (err: any) {
+      console.error('Error saving policy:', err)
+      setErrors({ submit: err.message })
+      return
     } finally {
       setSubmitting(false)
     }
@@ -716,6 +741,7 @@ function EditPolicyModal({
   return (
     <Modal open={open} onClose={onClose} title="Edit Policy">
       <div className="space-y-4">
+        {/* Title */}
         <div>
           <label className="block text-sm font-medium font-body text-neutral-700 mb-2">Title <span className="text-error-500">*</span></label>
           <input
@@ -729,6 +755,7 @@ function EditPolicyModal({
           {errors.title && <p className="text-xs font-body text-error-500 mt-1">{errors.title}</p>}
         </div>
 
+        {/* Category + Version */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium font-body text-neutral-700 mb-2">Category</label>
@@ -759,6 +786,7 @@ function EditPolicyModal({
           </div>
         </div>
 
+        {/* Description */}
         <div>
           <label className="block text-sm font-medium font-body text-neutral-700 mb-2">Description</label>
           <textarea
@@ -769,46 +797,76 @@ function EditPolicyModal({
           />
         </div>
 
+        {/* PDF Upload Section */}
+        <div>
+          <label className="block text-sm font-medium font-body text-neutral-700 mb-2">Policy PDF</label>
+          {currentPdfUrl && !pdfFile && (
+            <div className="flex items-center gap-2 mb-2 p-3 bg-primary-50 rounded-lg">
+              <FileText size={16} className="text-primary-600" />
+              <span className="text-sm text-primary-700">PDF already uploaded</span>
+            </div>
+          )}
+          <div
+            className="border-2 border-dashed border-neutral-300 rounded-xl p-6 text-center hover:border-accent-400 hover:bg-accent-50/30 transition-colors cursor-pointer"
+            onClick={() => document.getElementById('edit-pdf-input')?.click()}
+          >
+            <input
+              id="edit-pdf-input"
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                if (f) setPdfFile(f)
+              }}
+            />
+            <Upload size={24} className="text-neutral-400 mx-auto mb-2" />
+            <p className="text-sm font-medium text-neutral-600">
+              {pdfFile ? pdfFile.name : 'Click to upload new PDF'}
+            </p>
+            {!pdfFile && <p className="text-xs text-neutral-400 mt-1">Replace existing PDF</p>}
+          </div>
+        </div>
+
+        {/* Requires Acknowledgement Toggle */}
         <div className="flex items-center justify-between py-2">
           <label className="text-sm font-medium font-body text-neutral-700">Requires Acknowledgement</label>
           <button
             onClick={() => setRequiresAck(!requiresAck)}
-            className={`relative w-12 h-6 rounded-full transition-colors ${requiresAck ? 'bg-primary-500' : 'bg-neutral-300'}`}
+            className={`relative w-12 h-7 rounded-full transition-colors ${requiresAck ? 'bg-primary-500' : 'bg-neutral-300'}`}
           >
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${requiresAck ? 'translate-x-6' : 'translate-x-0'}`} />
+            <div className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${requiresAck ? 'translate-x-6' : 'translate-x-0.5'}`} />
           </button>
         </div>
 
+        {/* Active Status Toggle */}
         <div className="flex items-center justify-between py-2">
-          <label className="text-sm font-medium font-body text-neutral-700">Active Status</label>
+          <label className="text-sm font-medium font-body text-neutral-700">Active</label>
           <button
             onClick={() => setActive(!active)}
-            className={`relative w-12 h-6 rounded-full transition-colors ${active ? 'bg-primary-500' : 'bg-neutral-300'}`}
+            className={`relative w-12 h-7 rounded-full transition-colors ${active ? 'bg-primary-500' : 'bg-neutral-300'}`}
           >
-            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${active ? 'translate-x-6' : 'translate-x-0'}`} />
+            <div className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${active ? 'translate-x-6' : 'translate-x-0.5'}`} />
           </button>
         </div>
 
-        <div className="flex justify-end gap-3 pt-4">
+        {/* Error */}
+        {errors.submit && <p className="text-xs text-error-500">{errors.submit}</p>}
+
+        {/* Actions */}
+        <div className="flex gap-3 pt-2">
           <button
             onClick={onClose}
-            className="px-5 h-11 rounded-lg bg-white border border-neutral-200 text-sm font-body font-medium text-neutral-700 hover:bg-neutral-50 transition-colors"
+            className="flex-1 h-11 border border-neutral-200 rounded-xl text-sm font-medium text-neutral-600 hover:bg-neutral-50 transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="px-5 h-11 rounded-lg bg-primary-600 text-white text-sm font-body font-medium hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="flex-1 h-11 bg-primary-600 rounded-xl text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
           >
-            {submitting ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Saving...
-              </>
-            ) : (
-              'Save Changes'
-            )}
+            {submitting ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </div>
@@ -958,46 +1016,29 @@ export default function PolicyManagement() {
     fetchPolicies()
   }, [addToast])
 
-  const handleUpload = useCallback(
-    async (data: Omit<PolicyWithCounts, 'id' | 'upload_date' | 'last_updated' | 'created_at'>) => {
+    const handleEditSave = useCallback(
+    async (id: string, updates: Partial<PolicyWithCounts>) => {
       try {
-        const now = new Date().toISOString()
-
-        // Insert into Supabase
-        const { data: newPolicy, error: insertError } = await supabase
+        const { error } = await supabase
           .from('policies')
-          .insert({
-            title: data.title,
-            category: data.category,
-            version: data.version,
-            description: data.description,
-            pdf_url: data.pdf_url,
-            requires_acknowledgement: data.requires_acknowledgement,
-            active: data.active,
-            upload_date: now,
-            last_updated: now,
+          .update({
+            ...updates,
+            last_updated: new Date().toISOString(),
           })
-          .select()
-          .single()
+          .eq('id', id)
 
-        if (insertError) throw insertError
+        if (error) throw error
 
-        const totalStaff = policies[0]?.total_staff || 16
-        const policyWithCounts: PolicyWithCounts = {
-          ...newPolicy,
-          signed_count: 0,
-          total_staff: totalStaff,
-          status: 'active',
-        }
-
-        setPolicies((prev) => [policyWithCounts, ...prev])
-        addToast(`"${data.title}" has been published successfully`)
+        setPolicies((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, ...updates, last_updated: new Date().toISOString() } : p))
+        )
+        addToast('Policy updated successfully')
       } catch (err: any) {
-        console.error('Error uploading policy:', err)
-        addToast(`Failed to publish: ${err.message}`, 'error')
+        console.error('Error updating policy:', err)
+        addToast(`Failed to update: ${err.message}`, 'error')
       }
     },
-    [addToast, policies]
+    [addToast]
   )
 
   const handleEditSave = useCallback(
