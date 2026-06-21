@@ -1057,10 +1057,13 @@ export default function PolicyManagement() {
   const handleEditSave = useCallback(
     async (id: string, updates: Partial<PolicyWithCounts>) => {
       try {
+        // Strip 'status' - it doesn't exist in DB, only 'active' does
+        const { status: _status, ...dbUpdates } = updates
+
         const { error } = await supabase
           .from('policies')
           .update({
-            ...updates,
+            ...dbUpdates,
             last_updated: new Date().toISOString(),
           })
           .eq('id', id)
