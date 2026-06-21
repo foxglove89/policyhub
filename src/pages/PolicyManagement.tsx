@@ -1003,13 +1003,13 @@ export default function PolicyManagement() {
   const handleEditSave = useCallback(
     async (id: string, updates: Partial<PolicyWithCounts>) => {
       try {
-        const { error } = await supabase
-          .from('policies')
-          .update({
-            ...updates,
-            last_updated: new Date().toISOString(),
-          })
-          .eq('id', id)
+              const { error } = await supabase
+        .from('policies')
+        .update({
+          active: newActive,
+          last_updated: new Date().toISOString(),
+        })
+        .eq('id', id)
 
         if (error) throw error
 
