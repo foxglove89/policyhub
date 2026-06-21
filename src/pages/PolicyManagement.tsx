@@ -1025,13 +1025,9 @@ export default function PolicyManagement() {
     [addToast]
   )
 
-  const handleDeactivate = useCallback(
-    async (id: string) => {
-      try {
-        const { error } = await supabase
+          const { error } = await supabase
           .from('policies')
           .update({
-            status: 'inactive',
             active: false,
             last_updated: new Date().toISOString(),
           })
