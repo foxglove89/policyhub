@@ -820,7 +820,7 @@ function EditPolicyModal({
                 if (f) setPdfFile(f)
               }}
             />
-            <Upload size={24} className="text-neutral-400 mx-auto mb-2" />
+            <UploadCloud size={24} className="text-neutral-400 mx-auto mb-2" />
             <p className="text-sm font-medium text-neutral-600">
               {pdfFile ? pdfFile.name : 'Click to upload new PDF'}
             </p>
@@ -873,10 +873,6 @@ function EditPolicyModal({
     </Modal>
   )
 }
-
-/* ------------------------------------------------------------------ */
-/*  Dropdown Menu                                                      */
-/* ------------------------------------------------------------------ */
 
 function ActionsDropdown({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false)
@@ -1016,29 +1012,46 @@ export default function PolicyManagement() {
     fetchPolicies()
   }, [addToast])
 
-    const handleEditSave = useCallback(
-    async (id: string, updates: Partial<PolicyWithCounts>) => {
+  const handleUpload = useCallback(
+    async (data: Omit<PolicyWithCounts, 'id' | 'upload_date' | 'last_updated' | 'created_at'>) => {
       try {
-        const { error } = await supabase
+        const now = new Date().toISOString()
+
+        // Insert into Supabase
+        const { data: newPolicy, error: insertError } = await supabase
           .from('policies')
-          .update({
-            ...updates,
-            last_updated: new Date().toISOString(),
+          .insert({
+            title: data.title,
+            category: data.category,
+            version: data.version,
+            description: data.description,
+            pdf_url: data.pdf_url,
+            requires_acknowledgement: data.requires_acknowledgement,
+            active: data.active,
+            upload_date: now,
+            last_updated: now,
           })
-          .eq('id', id)
+          .select()
+          .single()
 
-        if (error) throw error
+        if (insertError) throw insertError
 
-        setPolicies((prev) =>
-          prev.map((p) => (p.id === id ? { ...p, ...updates, last_updated: new Date().toISOString() } : p))
-        )
-        addToast('Policy updated successfully')
+        const totalStaff = policies[0]?.total_staff || 16
+        const policyWithCounts: PolicyWithCounts = {
+          ...newPolicy,
+          signed_count: 0,
+          total_staff: totalStaff,
+          status: 'active',
+        }
+
+        setPolicies((prev) => [policyWithCounts, ...prev])
+        addToast(`"${data.title}" has been published successfully`)
       } catch (err: any) {
-        console.error('Error updating policy:', err)
-        addToast(`Failed to update: ${err.message}`, 'error')
+        console.error('Error uploading policy:', err)
+        addToast(`Failed to publish: ${err.message}`, 'error')
       }
     },
-    [addToast]
+    [addToast, policies]
   )
 
   const handleEditSave = useCallback(
