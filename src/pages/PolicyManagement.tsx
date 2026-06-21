@@ -369,10 +369,9 @@ function UploadPolicyModal({
         total_staff: 16,
         status: 'active',
       })
-    } catch (err: any) {
+        } catch (err: any) {
       console.error('Error publishing policy:', err)
-      addToast(`Failed to publish: ${err.message}`, 'error')
-      return
+      throw err
     } finally {
       setSubmitting(false)
     }
