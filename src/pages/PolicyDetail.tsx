@@ -549,11 +549,14 @@ function PolicyDetailContent() {
 
         setPolicy(policyData)
 
+        // Use staff table ID (not auth user ID) for foreign key
+        const staffId = profile?.id ?? user.id
+
         // Check if user has already signed this policy
         const { data: ackData, error: ackError } = await supabase
           .from('acknowledgements')
           .select('*')
-          .eq('staff_id', user.id)
+          .eq('staff_id', staffId)
           .eq('policy_id', id)
           .maybeSingle()
 
@@ -582,7 +585,7 @@ function PolicyDetailContent() {
           const { data: relatedAcks } = await supabase
             .from('acknowledgements')
             .select('policy_id')
-            .eq('staff_id', user.id)
+            .eq('staff_id', staffId)
 
           const relatedAckIds = new Set((relatedAcks || []).map(a => a.policy_id))
 
@@ -632,7 +635,7 @@ function PolicyDetailContent() {
         const { data, error: insertError } = await supabase
           .from('acknowledgements')
           .insert({
-            staff_id: user.id,
+            staff_id: profile?.id ?? user.id,
             policy_id: policy.id,
           })
           .select()
@@ -657,7 +660,7 @@ function PolicyDetailContent() {
         setIsSigning(false)
       }
     },
-    [user?.id, policy?.id, success, showError]
+    [user?.id, user?.email, policy?.id, profile?.id, success, showError]
   )
 
   if (loading) {
