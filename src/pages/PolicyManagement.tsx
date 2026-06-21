@@ -452,7 +452,7 @@ function UploadPolicyModal({
           {/* TODO note */}
           <div className="bg-info-50 border border-info-200 rounded-lg p-3">
             <p className="text-xs font-body text-info-600">
-              <strong>Note:</strong> PDF upload to Supabase Storage coming soon. You can publish the policy metadata now and upload the file later.
+              <strong>Note:</strong> The PDF will be uploaded to Supabase Storage automatically when you click Publish.
             </p>
           </div>
 
