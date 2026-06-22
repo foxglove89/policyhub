@@ -98,12 +98,12 @@ function RealPDFViewer({ pdfUrl }: { pdfUrl: string }) {
       </div>
 
       {/* PDF Viewer */}
-      <div className="flex-1 overflow-auto bg-neutral-100">
+            <div className="flex-1 overflow-auto bg-neutral-100" style={{ WebkitOverflowScrolling: 'touch' }}>
         <iframe
           src={signedUrl}
           title="Policy PDF"
-          className="w-full h-full min-h-[500px]"
-          style={{ border: 'none' }}
+          className="w-full"
+          style={{ border: 'none', minHeight: '70vh', height: '800px' }}
         />
       </div>
     </div>
