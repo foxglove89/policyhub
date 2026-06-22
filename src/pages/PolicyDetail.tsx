@@ -745,10 +745,10 @@ function PolicyDetailContent() {
 
       {/* Two Column Layout */}
       <div className="flex flex-col lg:flex-row gap-6">
-                {/* Left: PDF Viewer */}
+        {/* Left: PDF Viewer */}
         <div
-          className="w-full lg:w-[60%] h-[70vh] sm:h-[75vh] lg:h-[80vh] overflow-auto"
-          style={{ animationDelay: '300ms', WebkitOverflowScrolling: 'touch' }}
+          className="w-full lg:w-[60%]"
+          style={{ animationDelay: '300ms' }}
         >
           <PDFViewer
             policyTitle={policy.title}
