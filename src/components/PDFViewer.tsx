@@ -35,19 +35,12 @@ function RealPDFViewer({ pdfUrl }: { pdfUrl: string }) {
   useEffect(() => {
     async function getSignedUrl() {
       try {
-        // If it's already a full signed URL, use it directly
         if (pdfUrl.startsWith('http')) {
           setSignedUrl(pdfUrl)
           setLoading(false)
           return
         }
-
-        // Otherwise, generate a signed URL from Supabase Storage
-        const { data, error } = await supabase
-          .storage
-          .from('policies')
-          .createSignedUrl(pdfUrl, 3600) // 1 hour expiry
-
+        const { data, error } = await supabase.storage.from('policies').createSignedUrl(pdfUrl, 3600)
         if (error) throw error
         setSignedUrl(data?.signedUrl || null)
       } catch (err: any) {
@@ -57,13 +50,12 @@ function RealPDFViewer({ pdfUrl }: { pdfUrl: string }) {
         setLoading(false)
       }
     }
-
     getSignedUrl()
   }, [pdfUrl])
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-white rounded-xl border border-neutral-200">
+      <div className="flex flex-col items-center justify-center" style={{ height: '70vh' }}>
         <Loader2 size={32} className="animate-spin text-accent-500 mb-3" />
         <p className="text-sm text-neutral-500">Loading PDF...</p>
       </div>
@@ -72,7 +64,7 @@ function RealPDFViewer({ pdfUrl }: { pdfUrl: string }) {
 
   if (error || !signedUrl) {
     return (
-      <div className="flex flex-col items-center justify-center h-full min-h-[400px] bg-white rounded-xl border border-neutral-200 p-8 text-center">
+      <div className="flex flex-col items-center justify-center p-8 text-center" style={{ height: '70vh' }}>
         <FileText size={48} className="text-neutral-300 mb-4" />
         <p className="text-neutral-600 mb-2">Could not load PDF</p>
         <p className="text-sm text-neutral-400">{error || 'PDF URL not available'}</p>
@@ -81,29 +73,27 @@ function RealPDFViewer({ pdfUrl }: { pdfUrl: string }) {
   }
 
   return (
-    <div className="h-full flex flex-col bg-white rounded-xl border border-neutral-200 overflow-hidden" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+    <div className="bg-white rounded-xl border border-neutral-200" style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
       {/* Toolbar */}
-      <div className="flex items-center justify-between h-12 px-4 bg-neutral-50 border-b border-neutral-200 flex-shrink-0">
+      <div className="flex items-center justify-between h-12 px-4 bg-neutral-50 border-b border-neutral-200">
         <span className="text-xs font-mono text-neutral-500">PDF Document</span>
-        <div className="flex items-center gap-2">
-          <a
-            href={signedUrl}
-            download
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-600 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors"
-          >
-            <Download size={14} />
-            Download
-          </a>
-        </div>
+        <a
+          href={signedUrl}
+          download
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-neutral-600 bg-white border border-neutral-200 rounded-lg hover:bg-neutral-50 transition-colors"
+        >
+          <Download size={14} />
+          Download
+        </a>
       </div>
-
-      {/* PDF Viewer */}
-            <div className="flex-1 overflow-auto bg-neutral-100" style={{ WebkitOverflowScrolling: 'touch' }}>
+      {/* PDF iframe - explicit height for mobile scrolling */}
+      <div style={{ overflow: 'auto', WebkitOverflowScrolling: 'touch', height: '70vh', maxHeight: '800px' }}>
         <iframe
           src={signedUrl}
           title="Policy PDF"
-          className="w-full"
-          style={{ border: 'none', minHeight: '70vh', height: '800px' }}
+          width="100%"
+          height="100%"
+          style={{ border: 'none', display: 'block', minHeight: '800px' }}
         />
       </div>
     </div>
