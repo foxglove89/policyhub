@@ -1,11 +1,12 @@
 import { useState, useCallback, useMemo, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import {
   ArrowLeft,
   Check,
   Clock,
   ChevronDown,
+  ChevronRight,
   PenTool,
   ShieldCheck,
   FileText,
@@ -525,6 +526,8 @@ function PolicyDetailContent() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [relatedPolicies, setRelatedPolicies] = useState<RelatedPolicy[]>([])
+  const [nextPendingPolicy, setNextPendingPolicy] = useState<{ id: string; title: string } | null>(null)
+  const navigate = useNavigate()
 
   // Fetch policy data
   useEffect(() => {
@@ -600,6 +603,30 @@ function PolicyDetailContent() {
             }
           })
           setRelatedPolicies(relatedWithStatus)
+        }
+
+        // Fetch next pending policy (for "Next" button)
+        const { data: allPolicies } = await supabase
+          .from('policies')
+          .select('id, title')
+          .eq('active', true)
+          .order('last_updated', { ascending: false })
+
+        if (allPolicies) {
+          const { data: allAcks } = await supabase
+            .from('acknowledgements')
+            .select('policy_id')
+            .eq('staff_id', staffId)
+
+          const ackedIds = new Set((allAcks || []).map(a => a.policy_id))
+          const pending = allPolicies.filter(p => !ackedIds.has(p.id) && p.id !== id)
+          // Get the first pending policy after the current one in the list
+          const currentIndex = allPolicies.findIndex(p => p.id === id)
+          const nextPending = pending.find(p => {
+            const pIndex = allPolicies.findIndex(ap => ap.id === p.id)
+            return pIndex > currentIndex
+          }) || pending[0] || null
+          setNextPendingPolicy(nextPending)
         }
       } catch (err: any) {
         console.error('Error fetching policy:', err)
@@ -787,11 +814,23 @@ function PolicyDetailContent() {
             style={{ boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
           >
             {isSigned && signedData ? (
-              <SignedConfirmation
-                signedName={signedData.name}
-                signedDate={signedData.date}
-                signatureId={signedData.signatureId}
-              />
+              <div className="space-y-4">
+                <SignedConfirmation
+                  signedName={signedData.name}
+                  signedDate={signedData.date}
+                  signatureId={signedData.signatureId}
+                />
+                {nextPendingPolicy && (
+                  <button
+                    onClick={() => navigate(`/policies/${nextPendingPolicy.id}`)}
+                    className="w-full flex items-center justify-center gap-2 h-12 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-sm font-medium transition-colors animate-[fadeIn_400ms_ease-out]"
+                  >
+                    <span>Next Pending Policy</span>
+                    <ChevronRight size={18} />
+                    <span className="truncate max-w-[200px]">{nextPendingPolicy.title}</span>
+                  </button>
+                )}
+              </div>
             ) : (
               <SignatureForm
                 userName={userName}
